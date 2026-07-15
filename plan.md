@@ -9,7 +9,7 @@
 | 2     | Shared domain logic                  | ✅ Complete (2026-07-15) |
 | 3     | Services & Server Actions (CRUD)     | ✅ Complete (2026-07-15) |
 | 4     | Mini-EMR (`/admin`)                  | ✅ Complete (2026-07-15) |
-| 5     | Auth + Patient Portal (`/`)          | ⬜ Not started  |
+| 5     | Auth + Patient Portal (`/`)          | ✅ Complete (2026-07-15) |
 | 6     | Design system & motion polish        | ⬜ Not started  |
 | 7     | Deploy, docs, ship                   | ⬜ Not started  |
 
@@ -45,13 +45,13 @@ The premium design system in `Zealthy.md` (color tokens, Framer Motion timings/s
 
 | Brief requirement | Where handled |
 |---|---|
-| Lives at root **`/`** | Phase 5: `app/(portal)/page.tsx` |
-| **Login form** (email + password) | Phase 5: `signIn('credentials')` |
-| Login with **sample creds OR EMR-created creds** | Phase 5 verification |
-| Main page **summary**: appts next 7 days, refills next 7 days, basic info | Phase 5: `getPatientSummary()` |
-| Drill down → **full upcoming appointment schedule** (3 mo) | Phase 5: `portal/appointments/page.tsx` |
-| Drill down → **all prescriptions** (3 mo refills) | Phase 5: `portal/prescriptions/page.tsx` |
-| Per-patient data isolation | Phase 5: queries keyed by `session.patientId` |
+| Lives at root **`/`** | ✅ `app/(portal)/page.tsx` (login or redirect) |
+| **Login form** (email + password) | ✅ `LoginForm` → `loginAction` → `signIn('credentials')` |
+| Login with **sample creds OR EMR-created creds** | ✅ Verified live for both (seeded + freshly created) |
+| Main page **summary**: appts next 7 days, refills next 7 days, basic info | ✅ `app/(portal)/portal/page.tsx` via `getPatientSummary()` |
+| Drill down → **full upcoming appointment schedule** (3 mo) | ✅ `app/(portal)/portal/appointments/page.tsx` |
+| Drill down → **all prescriptions** (3 mo refills) | ✅ `app/(portal)/portal/prescriptions/page.tsx` |
+| Per-patient data isolation | ✅ Reads keyed by `session.patientId` (`requirePatient()`); verified live |
 
 ---
 
@@ -425,18 +425,115 @@ them as designed.)
 **Verification:** `npm run dev` → at `/admin`: create a patient, add/edit/delete an
 appointment + prescription, end a recurring appointment — all persist across reload.
 
-## Phase 5 — Auth + Patient Portal (`/`)
+## Phase 5 — Auth + Patient Portal (`/`)  ✅ COMPLETE (2026-07-15)
 
 **Goal:** login and patient-facing views.
 
-- **Auth.js v5** `auth.ts` with Credentials provider: look up `Patient` by email, compare plaintext password, return session `{ patientId, name, email }`. `app/api/auth/[...nextauth]/route.ts`; `middleware.ts` guards `/portal/*`.
-- `app/(portal)/page.tsx` — if unauthenticated, render the **login form** (email/password) → `signIn('credentials')`; if authenticated, redirect to `/portal`.
-- `app/(portal)/portal/page.tsx` — **dashboard**: personalized greeting, basic info, "Next 7 days" appointments, "Next 7 days" refills, drill-down links. Uses `getPatientSummary`.
-- `app/(portal)/portal/appointments/page.tsx` — full upcoming schedule (3 months, expanded occurrences).
-- `app/(portal)/portal/prescriptions/page.tsx` — all prescriptions with upcoming refill dates (3 months).
-- Session-scoped: every query keyed by `session.patientId` (a patient can only see their own data). Sign-out action.
+- [x] **Auth.js v5 split-config.** `auth.config.ts` (**new, as-built** — edge-safe base:
+  session strategy `jwt`, `pages.signIn = "/"`, and the `jwt` / `session` / `authorized`
+  callbacks; **no** DB, **no** providers) + `auth.ts` (extends it with the Credentials
+  provider that looks up `Patient` by email and compares the plaintext password, returning
+  `{ id, name, email }`). Session carries `patientId` (promoted to the top level of the
+  Session in the `session` callback). Exports `handlers`, `auth`, `signIn`, `signOut`.
+- [x] `app/api/auth/[...nextauth]/route.ts` — `export const { GET, POST } = handlers`.
+- [x] **`proxy.ts`** (**not `middleware.ts`** — see deviations) guards `/portal/*` using the
+  edge-safe config only; unauthenticated hits redirect to `/`.
+- [x] `lib/auth-helpers.ts` (**new, as-built**) — `requirePatient()`: the authoritative
+  server-side check called by every portal page (redirects to `/` if unauthenticated),
+  returning `{ patientId, session }`.
+- [x] `app/(portal)/page.tsx` — if authenticated, `redirect('/portal')`; else render the
+  **login form** (`LoginForm` → `loginAction` → `signIn('credentials')`). Surfaces the
+  seeded sample credential inline (take-home reviewers need to log in immediately).
+- [x] `app/(portal)/portal/layout.tsx` — authenticated shell: greeting + `PortalNav`
+  (active-tab highlight) + **sign-out** (`<form action={signOutAction}>`).
+- [x] `app/(portal)/portal/page.tsx` — **dashboard**: personalized greeting, basic info,
+  "Appointments · next 7 days", "Refills · next 7 days", drill-down links. Uses
+  `getPatientSummary(patientId, new Date())`.
+- [x] `app/(portal)/portal/appointments/page.tsx` — full 3-month schedule (expanded
+  occurrences) via `getPatientSchedule`.
+- [x] `app/(portal)/portal/prescriptions/page.tsx` — all prescriptions with upcoming
+  3-month refill dates via `getPatientSchedule`.
+- [x] Session-scoped: every query keyed by `session.patientId` — a patient only sees their
+  own data (verified live). Sign-out action clears the session and returns to `/`.
 
-**Verification:** log in with a seeded credential and with a patient created via `/admin`; confirm 7-day summary and 3-month drill-downs are correct and isolated per patient.
+**Files:** `auth.config.ts`, `auth.ts`, `proxy.ts`, `types/next-auth.d.ts`,
+`lib/auth-helpers.ts`, `app/api/auth/[...nextauth]/route.ts`, `app/(portal)/actions.ts`,
+`app/(portal)/layout.tsx`, `app/(portal)/page.tsx`, `app/(portal)/portal/layout.tsx`,
+`app/(portal)/portal/page.tsx`, `app/(portal)/portal/appointments/page.tsx`,
+`app/(portal)/portal/prescriptions/page.tsx`, `components/portal/LoginForm.tsx`,
+`components/portal/PortalNav.tsx`, `components/portal/schedule.tsx`. **Removed** the
+`create-next-app` default `app/page.tsx` (it collided with the route-group `/`) and its
+unused SVG assets.
+
+**Decisions & deviations from original plan (as-built):**
+
+- **`middleware.ts` → `proxy.ts` (Next.js 16 rename).** Per `AGENTS.md` ("this is NOT the
+  Next.js you know") and confirmed in `node_modules/next/dist/docs/.../16-proxy.md`:
+  *"Starting with Next.js 16, Middleware is now called Proxy."* The plan's `middleware.ts`
+  is therefore implemented as `proxy.ts`. Next 16 also requires the proxy to be a **declared
+  function export** — a destructured `export const { auth: proxy } = NextAuth(...)` builds
+  but fails page-data collection ("must export a function"), so `proxy.ts` wraps Auth.js's
+  `auth` runner in an explicit `export default function proxy(request, event)`.
+- **Split-config (`auth.config.ts` + `auth.ts`), not one `auth.ts`.** The canonical Auth.js
+  v5 pattern: session *verification* (decode the signed JWT) runs on every guarded request
+  and must stay free of the Prisma import, so the callbacks + guard live in an edge-safe
+  `auth.config.ts` that `proxy.ts` consumes; the Credentials provider + DB lookup live in
+  `auth.ts` (Node runtime: route handlers, Server Components, Server Actions). Keeps the
+  proxy bundle small and Node-dep-free.
+- **Defense in depth: proxy guard AND `requirePatient()`.** The Next.js auth guidance is
+  explicit that middleware/proxy is an *optimistic* check and the authoritative check
+  belongs next to the data (a layout check alone doesn't re-run on client-side navigation).
+  So `proxy.ts` gives the fast redirect, and **every portal page** additionally calls
+  `requirePatient()` (a real `auth()` check) right before its data fetch. Both were verified
+  live.
+- **Stateless JWT sessions.** `session.strategy = "jwt"` — the `patientId` rides in the
+  signed cookie, so there's no session table and the proxy can authorize from the cookie
+  alone. `AUTH_SECRET` (already in `.env` from Phase 1) signs it; Auth.js v5 infers it.
+- **Generic auth errors.** `authorize` returns `null` for BOTH unknown-email and
+  wrong-password, and `loginAction` maps the resulting `AuthError` to a single "Invalid
+  email or password." form error — never revealing which field was wrong. On success
+  `signIn` throws the `NEXT_REDIRECT` to `/portal`, which the action rethrows (only
+  `AuthError` is swallowed).
+- **Dates formatted to strings on the server** (same discipline as Phase 4): the portal
+  Server Components format every occurrence `Date` via `lib/format` and pass only strings
+  into the presentational `components/portal/schedule.tsx` items — no `Date` crosses the
+  client boundary, so no timezone-driven hydration mismatch. Appointment timestamps use
+  `formatDateTime` (local), date-only refills use `formatDate` (UTC).
+- **Type augmentation** (`types/next-auth.d.ts`) adds `patientId` to `Session`/`JWT`; the
+  `session` callback uses a `typeof` narrow so the assignment is type-safe regardless of how
+  the `next-auth/jwt` augmentation resolves.
+- **`export const dynamic = "force-dynamic"`** on `/` and all `/portal/*` pages — every
+  render depends on the current session, so nothing is statically cached.
+- **No new dependencies.** `next-auth@5.0.0-beta.31` was already installed in Phase 0; Phase
+  5 added zero packages.
+
+**Validation (all green):**
+
+- `npm run typecheck` — clean. `npm run lint` — clean.
+- `npm test` — **34/34** (Phase 0–3 suites unaffected). `npm run test:int` — **12/12**
+  against live Postgres (seed counts unchanged: 2 patients / 4 appts / 4 Rx).
+- `npm run build` — production build compiles; routes emitted: `/` (ƒ dynamic), `/portal`,
+  `/portal/appointments`, `/portal/prescriptions` (all ƒ dynamic),
+  `/api/auth/[...nextauth]` (ƒ), and **ƒ Proxy (Middleware)**.
+- **Live end-to-end (`npm run dev`, 16 automated assertions + follow-ups):**
+  - Unauthenticated `/portal`, `/portal/appointments`, `/portal/prescriptions` → **307**
+    redirect to `/?callbackUrl=…` (proxy guard).
+  - Login as seeded **Mark** (`mark@some-email-provider.net` / `Password123!`) → **302** +
+    session cookie; `/portal` renders his greeting + 7-day sections.
+  - **Wrong password** → no session cookie set (rejected).
+  - Login as **Lisa** → her dashboard renders; it does **not** contain Mark's email
+    (**per-patient isolation** confirmed both directions).
+  - A patient **created fresh** (EMR-style plaintext row) logs in and sees their dashboard.
+  - Already-authenticated `GET /` → **307** redirect to `/portal`; anonymous `GET /` →
+    **200** login form.
+  - Mark's 3-month drill-downs render **16 appointment occurrences** and **12 refill rows**
+    with real medication names and Weekly/Monthly recurrence chips (recurrence expansion
+    genuinely rendering end-to-end).
+  - Seed counts unchanged afterward (2 / 4 / 4).
+
+**Verification:** `npm run dev` → at `/`: log in with `mark@some-email-provider.net` /
+`Password123!` (or a patient created in `/admin`); confirm the 7-day summary and the
+3-month drill-downs are correct and isolated per patient; sign out.
 
 ## Phase 6 — Design system & motion polish
 
@@ -474,10 +571,12 @@ app/
   admin/patients/[id]/page.tsx
   admin/**/actions.ts                   # Server Actions
   api/auth/[...nextauth]/route.ts
-auth.ts  middleware.ts
+auth.config.ts  auth.ts  proxy.ts        # proxy.ts = Next 16's renamed middleware
+types/next-auth.d.ts
 lib/prisma.ts  lib/recurrence.ts  lib/windows.ts  lib/validation.ts  lib/types.ts
-lib/services/{patients,appointments,prescriptions}.ts
-components/{ui, forms, portal, admin}/…
+lib/auth-helpers.ts
+lib/services/{patients,appointments,prescriptions,reference,portal}.ts
+components/{ui, portal, admin}/…
 prisma/schema.prisma  prisma/seed.ts  prisma/seed-data.json
 tests/recurrence.test.ts
 ```

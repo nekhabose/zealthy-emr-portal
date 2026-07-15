@@ -23,7 +23,7 @@ design direction live in [`Zealthy.md`](./Zealthy.md).
 | Language           | **TypeScript**                                                |
 | Styling            | **Tailwind CSS v4** (CSS-first config)                        |
 | Database           | **Postgres** (Neon in production) via **Prisma 6**            |
-| Auth               | **Auth.js / NextAuth v5** (Credentials provider) — *Phase 5*  |
+| Auth               | **Auth.js / NextAuth v5** (Credentials provider, JWT sessions) |
 | Validation         | **Zod v4** — shared client/server schemas *(Phase 2)*         |
 | Date / recurrence  | **UTC-native** helpers (`lib/datetime.ts`) *(Phase 2)*        |
 | Data access        | **Service layer + Server Actions** (`lib/services/*`, `app/admin/actions.ts`) *(Phase 3)* |
@@ -50,7 +50,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | **2** | **Shared domain logic (recurrence, windows, validation)** | ✅ **Complete** |
 | **3** | **Services & Server Actions (CRUD)**       | ✅ **Complete** |
 | **4** | **Mini-EMR (`/admin`)**                    | ✅ **Complete** |
-| 5     | Auth + Patient Portal (`/`)                | ⬜ Not started  |
+| **5** | **Auth + Patient Portal (`/`)**            | ✅ **Complete** |
 | 6     | Design system & motion polish              | ⬜ Not started  |
 | 7     | Deploy, docs, ship                         | ⬜ Not started  |
 
@@ -86,6 +86,13 @@ plus **appointment** and **prescription** CRUD (add / inline-edit / delete / end
 Built as Server Components reading the Phase-3 services, with small client forms on
 `useActionState` reusing the Phase-2 Zod schemas. See
 [Mini-EMR admin surface](#mini-emr-admin-surface-phase-4) below.
+
+**Phase 5 delivered:** the **patient portal at `/`** — **Auth.js / NextAuth v5** email +
+password login (Credentials provider), a personalized dashboard (basic info + next-7-day
+appointments + next-7-day refills), and 3-month drill-downs for appointments and
+prescriptions. Every read is scoped to the signed-in `patientId`, guarded by both a
+`proxy.ts` redirect and a `requirePatient()` check next to the data. See
+[Patient portal](#patient-portal-phase-5) below.
 
 ---
 
@@ -241,6 +248,56 @@ actions `revalidatePath('/admin')` after each write).
 
 ---
 
+## Patient portal (Phase 5)
+
+The `/` surface is the patient-facing portal — **guarded by authentication** (unlike the
+open `/admin` EMR). A patient logs in with the email + password set in the EMR and sees
+only their own data.
+
+### Routes
+
+| Route                      | What it is                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `/`                        | **Login** (email + password). If already signed in, redirects to `/portal`.                |
+| `/portal`                  | **Dashboard** — greeting, basic info, appointments in the next 7 days, refills in the next 7 days, and links into the drill-downs. |
+| `/portal/appointments`     | **Full appointment schedule** — every expanded occurrence over the next 3 months.          |
+| `/portal/prescriptions`    | **All prescriptions** — every upcoming refill over the next 3 months.                       |
+
+### Auth architecture
+
+Auth.js v5 is wired with the canonical **split-config** pattern so session *verification*
+never drags the database import into the edge/proxy bundle:
+
+| File                     | Role                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------- |
+| `auth.config.ts`         | **Edge-safe** base: JWT session strategy, `pages.signIn`, and the `jwt` / `session` / `authorized` callbacks. No DB, no providers. |
+| `auth.ts`                | Extends it with the **Credentials** provider (looks up `Patient` by email, compares the plaintext password) and exports `handlers`, `auth`, `signIn`, `signOut`. Node runtime. |
+| `proxy.ts`               | Next 16's renamed **middleware**. Guards `/portal/*` using the edge-safe config only; unauthenticated hits redirect to `/`. |
+| `lib/auth-helpers.ts`    | `requirePatient()` — the authoritative server-side check every portal page runs before its data fetch. |
+| `app/api/auth/[...nextauth]/route.ts` | The Auth.js GET/POST endpoints.                                                  |
+
+> **`middleware.ts` is `proxy.ts` here.** Next.js 16 renamed Middleware to **Proxy**
+> (`node_modules/next/dist/docs/.../16-proxy.md`: *"Starting with Next.js 16, Middleware
+> is now called Proxy."*). The guard lives in `proxy.ts` accordingly.
+
+**Defense in depth.** Per the Next.js auth guidance, the proxy is an *optimistic* redirect
+and the authoritative check lives next to the data: every `/portal/*` page also calls
+`requirePatient()`, and every read (`getPatientSummary` / `getPatientSchedule`) is keyed by
+`session.patientId`, so a patient can only ever see their own appointments and refills.
+Failed logins return a single generic "Invalid email or password" — the portal never
+reveals whether the email or the password was wrong.
+
+### Try it
+
+```bash
+npm run dev            # → http://localhost:3000/
+```
+
+Sign in with a seeded credential (below) or a patient you created in `/admin`, review the
+7-day dashboard, open the two drill-downs, then sign out.
+
+---
+
 ## Getting started (local)
 
 **Prerequisites:** Node.js 20+ (Node 22+/24 LTS recommended) and a Postgres database
@@ -273,12 +330,15 @@ A successful seed prints:
 
 ### Seeded test credentials
 
-Both sample patients share the same password (portal login lands in **Phase 5**):
+Both sample patients share the same password — use either to log in at `/`:
 
 | Name         | Email                          | Password       |
 | ------------ | ------------------------------ | -------------- |
 | Mark Johnson | `mark@some-email-provider.net` | `Password123!` |
 | Lisa Smith   | `lisa@some-email-provider.net` | `Password123!` |
+
+The mini-EMR is open at `/admin` (no login); the portal at `/` requires one of the above
+(or any patient you create in the EMR).
 
 ### Useful scripts
 
@@ -314,5 +374,7 @@ Patient passwords are stored and compared **in plaintext, by deliberate design.*
 The exercise brief explicitly requires the EMR to set patient passwords in order to
 ease testing of the portal login. This is **not a production-safe practice** — a
 real system would hash passwords (e.g. bcrypt/argon2) and never store them
-recoverably. The choice is isolated to the Credentials compare and is called out
-here intentionally.
+recoverably. The choice is isolated to the Credentials `authorize` compare in
+`auth.ts` (`patient.password !== password`) and the EMR create/update actions; hashing
+on write plus a `bcrypt.compare` in that one spot is the single change that would
+productionise it. It is called out here intentionally.
