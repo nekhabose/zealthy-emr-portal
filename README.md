@@ -44,7 +44,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | Phase | Description                                | Status         |
 | ----- | ------------------------------------------ | -------------- |
 | **0** | **Scaffold & tooling**                     | ✅ **Complete** |
-| 1     | Data layer (schema, migration, seed)       | ⬜ Not started  |
+| **1** | **Data layer (schema, migration, seed)**   | ✅ **Complete** |
 | 2     | Shared domain logic (recurrence, windows)  | ⬜ Not started  |
 | 3     | Services & Server Actions (CRUD)           | ⬜ Not started  |
 | 4     | Mini-EMR (`/admin`)                        | ⬜ Not started  |
@@ -56,12 +56,47 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 Phase-1+ dependencies installed (Prisma, Zod, NextAuth v5, date-fns), a Postgres
 Prisma datasource, environment templates, and this README.
 
+**Phase 1 delivered:** the full Prisma data model (`Patient`, `Appointment`,
+`Prescription`, and the `Medication` / `Dosage` reference tables + `RepeatSchedule` /
+`RefillSchedule` enums), the `init` migration, a Prisma-client singleton
+(`lib/prisma.ts`), and an **idempotent seed** (`prisma/seed.ts`) that loads the sample
+patients and reference lists from a local copy of the exercise gist
+(`prisma/seed-data.json`). Recurrence is stored as an anchor + cadence + optional
+`endsAt` and expanded at read time in Phase 2 — see the data-model section below.
+
+---
+
+## Data model
+
+```
+Patient        id, name, email @unique, password, createdAt, updatedAt
+               → appointments[]  prescriptions[]
+Appointment    id, patientId→Patient, provider, datetime,
+               repeat (RepeatSchedule), endsAt?, createdAt, updatedAt
+Prescription   id, patientId→Patient, medication, dosage, quantity,
+               refillOn @db.Date, refillSchedule (RefillSchedule), endsAt?, …
+Medication     id, name @unique                 // reference list, seeded
+Dosage         id, value @unique, sortOrder      // reference list, seeded (numeric order)
+
+enum RepeatSchedule { NONE WEEKLY MONTHLY }
+enum RefillSchedule { NONE WEEKLY MONTHLY }
+```
+
+- **`medication` / `dosage` are denormalized string snapshots** on the prescription; the
+  create/edit form's selectable options are driven by the `Medication` / `Dosage`
+  reference tables.
+- **Recurrence is computed, not stored.** An appointment/prescription persists one anchor
+  (`datetime` / `refillOn`) + a cadence + an optional `endsAt` (the "end recurring" action).
+  Concrete occurrences are expanded within a window at read time (Phase 2).
+- **The seed is idempotent:** patients are upserted by `email` and their children fully
+  replaced on each run, so re-seeding converges instead of duplicating.
+
 ---
 
 ## Getting started (local)
 
-**Prerequisites:** Node.js 20+ and a Postgres database (a local instance or a free
-[Neon](https://neon.tech) project).
+**Prerequisites:** Node.js 20+ (Node 22+/24 LTS recommended) and a Postgres database
+(a local instance or a free [Neon](https://neon.tech) project).
 
 ```bash
 # 1. Install dependencies (also runs `prisma generate`)
@@ -73,23 +108,43 @@ cp .env.example .env
 #     DATABASE_URL  → your Postgres/Neon connection string
 #     AUTH_SECRET   → generate one:  npx auth secret
 
-# 3. Run the dev server
+# 3. Create the schema and seed sample data
+npm run db:migrate      # applies migrations (prisma migrate dev)
+npm run db:seed         # loads sample patients + reference lists
+
+# 4. Run the dev server
 npm run dev
 #   → http://localhost:3000
+
+# (optional) browse the data
+npm run db:studio       # Prisma Studio
 ```
 
-> Database migrations and the seed script arrive in **Phase 1**. Until then the app
-> boots against the placeholder `DATABASE_URL` without touching the database.
+A successful seed prints:
+`Seed complete: 2 patients, 4 appointments, 4 prescriptions, 7 medications, 11 dosages.`
+
+### Seeded test credentials
+
+Both sample patients share the same password (portal login lands in **Phase 5**):
+
+| Name         | Email                          | Password       |
+| ------------ | ------------------------------ | -------------- |
+| Mark Johnson | `mark@some-email-provider.net` | `Password123!` |
+| Lisa Smith   | `lisa@some-email-provider.net` | `Password123!` |
 
 ### Useful scripts
 
-| Command             | What it does                          |
-| ------------------- | ------------------------------------- |
-| `npm run dev`       | Start the Next.js dev server          |
-| `npm run build`     | Production build                      |
-| `npm run start`     | Serve the production build            |
-| `npm run lint`      | ESLint                                |
-| `npm run typecheck` | TypeScript type-check (no emit)       |
+| Command             | What it does                                        |
+| ------------------- | --------------------------------------------------- |
+| `npm run dev`       | Start the Next.js dev server                        |
+| `npm run build`     | Production build                                    |
+| `npm run start`     | Serve the production build                          |
+| `npm run lint`      | ESLint                                              |
+| `npm run typecheck` | TypeScript type-check (no emit)                     |
+| `npm run db:migrate`| Create/apply migrations (`prisma migrate dev`)      |
+| `npm run db:seed`   | Seed sample + reference data (idempotent)           |
+| `npm run db:reset`  | Drop, re-migrate, and re-seed the database          |
+| `npm run db:studio` | Open Prisma Studio                                  |
 
 ---
 

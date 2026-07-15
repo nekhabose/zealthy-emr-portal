@@ -1,12 +1,18 @@
 // Zealthy — Prisma schema
 //
-// Phase 0 (scaffold): datasource + generator only.
-// Data models (Patient, Appointment, Prescription, Medication, Dosage, and the
-// RepeatSchedule / RefillSchedule enums) are introduced in Phase 1 — Data layer.
+// Phase 1 (data layer): Patient / Appointment / Prescription domain models plus
+// the Medication / Dosage reference tables and the RepeatSchedule / RefillSchedule
+// enums. Seeded idempotently from prisma/seed-data.json (a local copy of the
+// exercise gist) via prisma/seed.ts.
 //
-// Passwords are stored in plaintext by deliberate design: the exercise brief
-// requires settable patient passwords to ease testing. This is a non-production
-// choice and is documented in the README.
+// Recurrence is COMPUTED, not stored: an appointment/prescription persists a single
+// anchor (`datetime` / `refillOn`) + a schedule + an optional `endsAt`. Concrete
+// occurrences are expanded at read time by the Phase 2 domain layer. `endsAt` is the
+// brief's "way to end recurring appointments/prescriptions".
+//
+// Passwords are stored in plaintext by deliberate design: the exercise brief requires
+// settable patient passwords to ease testing. This is a non-production choice and is
+// documented in the README, isolated to the Auth.js Credentials compare (Phase 5).
 
 generator client {
   provider = "prisma-client-js"
@@ -15,4 +21,95 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+/// A patient / portal user. `email` is the natural key used for idempotent seeding
+/// and for the portal Credentials login.
+model Patient {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String // plaintext by design — see file header + README
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointments  Appointment[]
+  prescriptions Prescription[]
+
+  @@map("patients")
+}
+
+/// A scheduled appointment. Stores one anchor `datetime` + a `repeat` cadence;
+/// recurring occurrences are expanded at read time. `endsAt`, when set, truncates
+/// the recurrence (the "end recurring appointment" action).
+model Appointment {
+  id        String         @id @default(cuid())
+  patientId String
+  patient   Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  provider  String
+  datetime  DateTime
+  repeat    RepeatSchedule @default(NONE)
+  endsAt    DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([patientId])
+  @@map("appointments")
+}
+
+/// A prescription. `medication` and `dosage` are denormalized string snapshots; the
+/// create/edit form's selectable options come from the Medication / Dosage reference
+/// tables. `refillOn` is the anchor date, `refillSchedule` the cadence, `endsAt` the
+/// optional recurrence terminator.
+model Prescription {
+  id             String         @id @default(cuid())
+  patientId      String
+  patient        Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  medication     String
+  dosage         String
+  quantity       Int
+  refillOn       DateTime       @db.Date
+  refillSchedule RefillSchedule @default(NONE)
+  endsAt         DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([patientId])
+  @@map("prescriptions")
+}
+
+/// Reference list of prescribable medications, seeded from the gist. The prescription
+/// form's medication dropdown is populated from this table.
+model Medication {
+  id   String @id @default(cuid())
+  name String @unique
+
+  @@map("medications")
+}
+
+/// Reference list of dosages, seeded from the gist. `sortOrder` preserves the
+/// numeric ordering ("5mg" < "10mg") that lexical string sorting would break, so the
+/// dosage dropdown can render in ascending strength.
+model Dosage {
+  id        String @id @default(cuid())
+  value     String @unique
+  sortOrder Int    @default(0)
+
+  @@map("dosages")
+}
+
+/// Appointment recurrence cadence. Seed data uses `weekly` / `monthly`; NONE is the
+/// default for one-off appointments.
+enum RepeatSchedule {
+  NONE
+  WEEKLY
+  MONTHLY
+}
+
+/// Prescription refill cadence. Seed data uses `monthly`; WEEKLY/NONE round out the
+/// options exposed by the prescription form.
+enum RefillSchedule {
+  NONE
+  WEEKLY
+  MONTHLY
 }

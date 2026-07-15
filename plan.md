@@ -5,7 +5,7 @@
 | Phase | Title                                | Status         |
 | ----- | ------------------------------------ | -------------- |
 | 0     | Scaffold & tooling                   | ✅ Complete (2026-07-15) |
-| 1     | Data layer                           | ⬜ Not started  |
+| 1     | Data layer                           | ✅ Complete (2026-07-15) |
 | 2     | Shared domain logic                  | ⬜ Not started  |
 | 3     | Services & Server Actions (CRUD)     | ⬜ Not started  |
 | 4     | Mini-EMR (`/admin`)                  | ⬜ Not started  |
@@ -124,21 +124,60 @@ enum RefillSchedule { NONE WEEKLY MONTHLY }
 - `npm run dev` — server Ready; `GET /` → HTTP 200.
 - `npx prisma validate` — schema valid; `npx prisma generate` — client generated.
 
-## Phase 1 — Data layer
+## Phase 1 — Data layer  ✅ COMPLETE (2026-07-15)
 
 **Goal:** schema, migration, idempotent seed from the gist.
 
-- Write the Prisma models above; `prisma migrate dev --name init`.
-- **Seed script** `prisma/seed.ts` (wired via `package.json` `prisma.seed`):
+- [x] Wrote the Prisma models above; `prisma migrate dev --name init` → migration `20260715212929_init` created + applied.
+- [x] **Seed script** `prisma/seed.ts` (wired via `package.json` `prisma.seed`):
   - **Source gist:** https://gist.github.com/sbraford/73f63d75bb995b6597754c1707e40cc2
     (raw: https://gist.githubusercontent.com/sbraford/73f63d75bb995b6597754c1707e40cc2/raw).
-    Download once and embed a local copy at `prisma/seed-data.json` so seeding is offline-deterministic and reproducible in CI/Vercel.
-  - Upsert `Medication` (7 names: Diovan, Lexapro, Metformin, Ozempic, Prozac, Seroquel, Tegretol) and `Dosage` (1mg…1000mg, sorted numerically).
-  - For each `users[]`: upsert `Patient` (by email) with nested `appointments`/`prescriptions`. Map JSON `repeat`→`RepeatSchedule`, `refill_schedule`→`RefillSchedule`, `refill_on`→`refillOn`, `datetime`→`datetime`.
-  - Idempotent (upsert by natural keys) so re-seeding is safe.
-- `lib/prisma.ts` — singleton `PrismaClient` (dev hot-reload guard).
+    Downloaded once and embedded verbatim at `prisma/seed-data.json` so seeding is offline-deterministic and reproducible in CI/Vercel.
+  - Upserts `Medication` (7 names: Diovan, Lexapro, Metformin, Ozempic, Prozac, Seroquel, Tegretol) and `Dosage` (1mg…1000mg) by unique natural key.
+  - For each `users[]`: upsert `Patient` (by email), then fully replace nested `appointments`/`prescriptions`. Maps JSON `repeat`→`RepeatSchedule`, `refill_schedule`→`RefillSchedule`, `refill_on`→`refillOn`, `datetime`→`datetime`.
+  - Idempotent so re-seeding is safe (verified: counts unchanged after a second run).
+- [x] `lib/prisma.ts` — singleton `PrismaClient` (dev hot-reload guard).
 
-**Verification:** `npx prisma studio` shows patients with nested rows; medications/dosages populated.
+**Files:** `prisma/schema.prisma`, `prisma/migrations/20260715212929_init/migration.sql`, `prisma/seed.ts`, `prisma/seed-data.json`, `lib/prisma.ts`, `package.json` (`prisma.seed` + `db:*` scripts), `.env` (local Postgres URL + real `AUTH_SECRET`).
+
+**Decisions & deviations from original plan (as-built):**
+
+- **Seed enum coverage confirmed.** The gist uses only `weekly`/`monthly` for appointment `repeat`
+  and `monthly` for `refill_schedule` — all covered by `RepeatSchedule`/`RefillSchedule
+  { NONE WEEKLY MONTHLY }`. No `DAILY` (or other) member is needed; the seed's enum mapper
+  throws on any unknown value so future coverage gaps fail loudly rather than silently coercing.
+- **`Dosage.sortOrder Int` added** (beyond the plan's bare `value @unique`). Lexical sorting
+  breaks dosage strength ("10mg" < "5mg"); the seed derives `sortOrder` from the numeric prefix
+  so the Phase-4 dosage dropdown can render in ascending strength. `Medication`/`Dosage`/all
+  models use `cuid()` string ids.
+- **`updatedAt` added to `Appointment`/`Prescription`** (plan listed only `createdAt`) — cheap
+  edit-tracking that the Phase-3 update actions benefit from.
+- **Idempotency strategy = upsert-parent + replace-children.** Appointments/prescriptions have no
+  stable natural key, so rather than upserting nested rows the seed upserts each `Patient` by email
+  then `deleteMany` + `createMany` its children inside one `$transaction`. Re-running converges to
+  the same state (no duplicate rows) — the plan's "upsert by natural keys" intent, adapted to the
+  keyless children.
+- **Seed runs on Node's native TypeScript type-stripping** (`prisma.seed = "node prisma/seed.ts"`) —
+  no `tsx`/`ts-node` dependency added (Node 26). Node emits a harmless
+  `MODULE_TYPELESS_PACKAGE_JSON` reparse warning because the script is ESM (`import.meta.url`) in a
+  package without `"type":"module"`; left as-is since flipping the whole Next app to ESM is an
+  unnecessary Phase-1 risk.
+- **`db:reset` is blocked by Prisma's AI-agent safety guard** when invoked by Claude Code (a
+  deliberate guardrail against destructive resets). The script is correct for a human developer;
+  Phase-1 validation instead exercised `migrate dev` + `db:seed` (twice) + direct SQL inspection.
+- Added `db:migrate`, `db:reset`, `db:seed`, `db:studio` npm scripts.
+
+**Validation (all green):**
+
+- `prisma migrate dev --name init` — migration applied; Prisma Client regenerated.
+- `npm run db:seed` — **2 patients, 4 appointments, 4 prescriptions, 7 medications, 11 dosages.**
+- Re-ran `db:seed` — identical counts (idempotent).
+- Direct SQL inspection: nested rows attach to the right patients; `datetime` stored UTC
+  (`16:30-07:00` → `23:30Z`, timezone-correct); enum strings mapped (`weekly`→`WEEKLY`, etc.);
+  `refillOn` stored as `DATE`; dosages ordered 1→1000 by `sortOrder`.
+- `npm run typecheck`, `npm run lint`, `npm run build` — all clean (build still prerenders `/`).
+
+**Verification:** `npm run db:studio` (or `npx prisma studio`) shows patients with nested rows; medications/dosages populated.
 
 ## Phase 2 — Shared domain logic (the hard part)
 
