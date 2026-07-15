@@ -49,7 +49,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | **1** | **Data layer (schema, migration, seed)**   | ✅ **Complete** |
 | **2** | **Shared domain logic (recurrence, windows, validation)** | ✅ **Complete** |
 | **3** | **Services & Server Actions (CRUD)**       | ✅ **Complete** |
-| 4     | Mini-EMR (`/admin`)                        | ⬜ Not started  |
+| **4** | **Mini-EMR (`/admin`)**                    | ✅ **Complete** |
 | 5     | Auth + Patient Portal (`/`)                | ⬜ Not started  |
 | 6     | Design system & motion polish              | ⬜ Not started  |
 | 7     | Deploy, docs, ship                         | ⬜ Not started  |
@@ -79,6 +79,13 @@ admin **Server Actions** (`app/admin/actions.ts`) that Zod-validate form input, 
 service, revalidate, and return a typed `FormState`. Backed by DB-free unit tests **and**
 a live integration suite. See [Service & action layer](#service--action-layer-phase-3)
 below.
+
+**Phase 4 delivered:** the full **mini-EMR at `/admin`** — a patients table with
+at-a-glance data, a new-patient form, and a patient record page with editable basic info
+plus **appointment** and **prescription** CRUD (add / inline-edit / delete / end-recurring).
+Built as Server Components reading the Phase-3 services, with small client forms on
+`useActionState` reusing the Phase-2 Zod schemas. See
+[Mini-EMR admin surface](#mini-emr-admin-surface-phase-4) below.
 
 ---
 
@@ -182,6 +189,55 @@ npm run test:int  # live integration — drives the service layer against a real
 
 The integration suite creates throwaway rows under unique emails and cascade-deletes them
 afterward, so it never disturbs the seeded sample patients.
+
+---
+
+## Mini-EMR admin surface (Phase 4)
+
+The `/admin` surface is the operator-facing EMR — **open by design** (the brief specifies
+no auth here; the Phase-5 portal is the guarded surface). It's built entirely on the
+Phase-3 services and actions, with no changes to that layer.
+
+### Routes
+
+| Route                       | What it is                                                                                   |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| `/admin`                    | **Patients table** — name, email, # upcoming appointments, next appointment, # active Rx; "New patient" button; empty-state when there are none. |
+| `/admin/patients/new`       | **New-patient form** — name, email, and a settable password.                                 |
+| `/admin/patients/[id]`      | **Patient record** — editable basic info + **Appointments** and **Prescriptions** sections (add / inline-edit / delete / end-recurring). |
+
+### How it's built
+
+- **Server Components read; client components mutate.** Each page is an async Server
+  Component that reads a Phase-3 service (`listPatientsWithCounts`, `getPatientDetail`,
+  `listMedications` / `listDosages`). The interactive pieces — forms, the row edit toggle,
+  confirm-to-delete — are small client components under `components/admin/`.
+- **Forms take their Server Action as a prop.** Instead of importing the action module,
+  each form receives a bound action (`updateAppointmentAction.bind(null, id)`) as a prop,
+  so a single `PatientForm` / `AppointmentForm` / `PrescriptionForm` serves both the
+  create and edit cases. Forms use React 19's **`useActionState`** for inline field errors
+  (from the shared Zod schemas, re-parsed server-side) and the pending state.
+- **The prescription form's options come from the reference tables.** The medication and
+  dosage `<select>`s are populated from the seeded `Medication` / `Dosage` tables and the
+  action re-validates the submitted values against those same lists.
+- **Dates are formatted on the server; only strings cross to the client.** `lib/format.ts`
+  produces both the human display string and the `<input>` default-value string inside the
+  Server Components, so there's no client/server timezone divergence (no hydration
+  mismatch). Timestamps use local getters (so the wall-clock round-trips through
+  `datetime-local`); date-only values use UTC getters (so `@db.Date` values don't shift a
+  day).
+- **Styling is clean-but-basic** (Tailwind utilities, a little brand green); the full
+  design system and motion land in Phase 6.
+
+### Try it
+
+```bash
+npm run dev            # → http://localhost:3000/admin
+```
+
+Create a patient, open their record, add an appointment and a prescription, edit and
+delete them, and end a recurring appointment — every change persists across reload (the
+actions `revalidatePath('/admin')` after each write).
 
 ---
 

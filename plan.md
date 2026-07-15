@@ -8,7 +8,7 @@
 | 1     | Data layer                           | ✅ Complete (2026-07-15) |
 | 2     | Shared domain logic                  | ✅ Complete (2026-07-15) |
 | 3     | Services & Server Actions (CRUD)     | ✅ Complete (2026-07-15) |
-| 4     | Mini-EMR (`/admin`)                  | ⬜ Not started  |
+| 4     | Mini-EMR (`/admin`)                  | ✅ Complete (2026-07-15) |
 | 5     | Auth + Patient Portal (`/`)          | ⬜ Not started  |
 | 6     | Design system & motion polish        | ⬜ Not started  |
 | 7     | Deploy, docs, ship                   | ⬜ Not started  |
@@ -34,12 +34,12 @@ The premium design system in `Zealthy.md` (color tokens, Framer Motion timings/s
 
 | Brief requirement | Where handled |
 |---|---|
-| Lives at `/admin`, **no auth** | `app/admin/*` route group (open access) — Phase 4 |
-| Main page = **table of users w/ at-a-glance data** | Phase 4: `app/admin/page.tsx` (name, email, # upcoming appts, next appt, # active Rx) |
-| Drill into a **patient record** → upcoming appts + prescribed meds | Phase 4: `app/admin/patients/[id]/page.tsx` |
-| **Prescriptions CRUD** | Phase 3 services/actions + Phase 4 `PrescriptionForm` |
-| **Appointments CRUD** (+ end recurring, schedule new) | Phase 3 + Phase 4 `AppointmentForm`; end-recurring via `endsAt` |
-| **Patient data CRU + New patient form** (settable password) | Phase 4: `patients/new/page.tsx` + editable basic info |
+| Lives at `/admin`, **no auth** | ✅ `app/admin/*` route group (open access; `app/admin/layout.tsx`) |
+| Main page = **table of users w/ at-a-glance data** | ✅ `app/admin/page.tsx` (name, email, # upcoming appts, next appt, # active Rx) |
+| Drill into a **patient record** → upcoming appts + prescribed meds | ✅ `app/admin/patients/[id]/page.tsx` |
+| **Prescriptions CRUD** | ✅ Phase 3 services/actions + `PrescriptionForm` / `PrescriptionRow` |
+| **Appointments CRUD** (+ end recurring, schedule new) | ✅ Phase 3 + `AppointmentForm` / `AppointmentRow`; end-recurring button |
+| **Patient data CRU + New patient form** (settable password) | ✅ `patients/new/page.tsx` + editable basic info (`PatientForm`) |
 
 **Section 2 — Patient Portal**
 
@@ -335,17 +335,95 @@ enum RefillSchedule { NONE WEEKLY MONTHLY }
 
 **Verification:** `npm test && npm run test:int` (the latter needs the local Postgres up).
 
-## Phase 4 — Mini-EMR (`/admin`)
+## Phase 4 — Mini-EMR (`/admin`)  ✅ COMPLETE (2026-07-15)
 
 **Goal:** full admin functionality, clean-but-basic styling (polish deferred to Phase 6).
 
-- `app/admin/page.tsx` — **patients table** (name, email, # upcoming appts, next appt, # active Rx) with at-a-glance data; "New patient" button. Server Component reading `listPatientsWithCounts`.
-- `app/admin/patients/new/page.tsx` — new-patient form (name, email, **password**), calls `createPatient` action.
-- `app/admin/patients/[id]/page.tsx` — patient record: editable basic info (CRU), **Appointments** section (list + add/edit/delete + end-recurring), **Prescriptions** section (list + add/edit/delete).
-- Form components: `PatientForm`, `AppointmentForm` (provider free-text, datetime picker, repeat select), `PrescriptionForm` (medication select ← reference table, dosage select ← reference table, quantity, refillOn, refillSchedule). Client components using Server Actions + Zod validation state.
-- Delete/end use confirm; `useFormStatus`/optimistic pending states.
+- [x] `app/admin/layout.tsx` (**new, as-built**) — shared header + max-width container for
+  the whole EMR surface; switches to the Geist sans font. Documents the "open by design,
+  no auth" stance inline.
+- [x] `app/admin/page.tsx` — **patients table** (name, email, # upcoming appts, next appt,
+  # active Rx) with at-a-glance data; "New patient" button. Server Component reading
+  `listPatientsWithCounts(new Date())`; empty-state card when there are no patients.
+- [x] `app/admin/patients/new/page.tsx` — new-patient form (name, email, **password**),
+  wired to `createPatientAction` (redirects to the new record on success).
+- [x] `app/admin/patients/[id]/page.tsx` — patient record: editable basic info (CRU),
+  **Appointments** section (list + add/edit/delete + end-recurring), **Prescriptions**
+  section (list + add/edit/delete + end-refills). Async `params` (Next 16). `notFound()`
+  on an unknown id.
+- [x] Form components (`components/admin/*`): `PatientForm`, `AppointmentForm` (provider
+  free-text, `datetime-local`, repeat select, optional end date), `PrescriptionForm`
+  (medication select ← reference table, dosage select ← reference table, quantity,
+  refillOn, refillSchedule, optional end date). Client components on `useActionState`
+  reusing the Phase-2 Zod schemas for inline field errors + pending state.
+- [x] `AppointmentRow` / `PrescriptionRow` — read-view ⇄ inline editor toggle;
+  `Disclosure` gates the add forms; `ConfirmForm` runs delete / end-recurrence behind a
+  native `confirm()`. Bound Server Actions (`action.bind(null, id)`) passed as props.
+- [x] `components/ui/controls.tsx` — shared presentational primitives (class tokens,
+  `Field`, `FieldError`, `FormNotice`, `Chip`); `lib/format.ts` — timezone-correct date
+  formatting for both display and `<input>` default values.
 
-**Verification:** create a patient, add/edit/delete an appointment + prescription, end a recurring appointment — all persist across reload.
+**Files:** `app/admin/layout.tsx`, `app/admin/page.tsx`, `app/admin/patients/new/page.tsx`,
+`app/admin/patients/[id]/page.tsx`, `components/ui/controls.tsx`, `lib/format.ts`,
+`components/admin/{action.ts, cadence.ts, PatientForm.tsx, AppointmentForm.tsx,
+PrescriptionForm.tsx, AppointmentRow.tsx, PrescriptionRow.tsx, ConfirmForm.tsx,
+Disclosure.tsx}`. (No changes needed to the Phase-3 actions/services — the forms bind to
+them as designed.)
+
+**Decisions & deviations from original plan (as-built):**
+
+- **Dates are formatted to strings on the SERVER, and only strings cross into client
+  components.** `lib/format.ts` turns each stored `Date` into both its human display
+  string and its `<input>` default-value string inside the Server Components; the client
+  rows/forms receive plain strings, never `Date`s. This eliminates the client/server
+  timezone-divergence class of hydration mismatch entirely. TZ handling is split by
+  column kind: appointment `datetime` (a real timestamp) uses **local** getters so the
+  wall-clock shown round-trips through `new Date(localString)` on the same server;
+  date-only values (`refillOn @db.Date`, date-input `endsAt`) use **UTC** getters to
+  avoid the classic off-by-one-day shift.
+- **`useActionState`, not `useFormStatus`.** The plan mentioned `useFormStatus`; as-built,
+  every form uses React 19's `useActionState` — its third return value is the `pending`
+  flag, so a separate status child isn't needed, and it already carries the typed
+  `FormState` for inline field errors. Delete / end-recurrence also go through
+  `useActionState` (via `ConfirmForm`) so the bound actions' `(prevState, formData)`
+  signature is satisfied — a plain `<form action>` would call them with only `formData`.
+- **Forms are action-agnostic and reusable.** Each form takes its Server Action as a
+  **prop** (`BoundAction`) rather than importing the action module, so one `PatientForm`
+  serves both create (new-patient page) and edit (record page), and one `AppointmentForm`
+  serves the add disclosure and every row's inline editor. The Server Component binds the
+  id (`updateAppointmentAction.bind(null, a.id)`) and passes it down.
+- **Passwords are a visible text input.** The brief wants admin-settable passwords to ease
+  portal testing, so the operator must be able to read what they set — the field is
+  `type="text"`. In edit mode it's optional (blank ⇒ keep current, per `patientUpdateSchema`).
+- **"End recurring" ends as of now** behind a confirm (the action's default), shown only
+  when a row is actually recurring and not already terminated (`repeat !== NONE && endsAt
+  === null`). A chosen end-date is supported by the action but not surfaced as UI — a
+  deliberate Phase-4 scope trim.
+- **`export const dynamic = "force-dynamic"`** on `/admin` and the record page — an
+  internal tool over mutable data should always render fresh, not be statically cached.
+- **A touch of brand green** (`emerald-800` primary, soft chips) is used even though full
+  design polish is Phase 6 — cheap, makes the surface look intentional, and low-risk to
+  restyle later against the real tokens.
+
+**Validation (all green):**
+
+- `npm run typecheck` — clean. `npm run lint` — clean.
+- `npm test` — **34/34** (Phase 0–3 suites unaffected). `npm run test:int` — **12/12**
+  against live Postgres (seed counts unchanged: 2 patients / 4 appts / 4 Rx).
+- `npm run build` — production build compiles; routes emitted: `/admin` (ƒ dynamic),
+  `/admin/patients/[id]` (ƒ dynamic), `/admin/patients/new` (○ static).
+- **Live smoke (`npm run dev`):** all three admin routes return **HTTP 200** with the
+  expected content (table with both seeded patients + at-a-glance columns; new-patient
+  form with the plaintext-password note; record page with Basic info / Appointments /
+  Prescriptions sections and the seeded medication options populating the Rx dropdown).
+- **Live end-to-end mutation:** replayed the create-patient Server Action against the
+  running server (no-JS form encoding) → **303 redirect** to the new record; the new
+  patient then rendered in the `/admin` table (read + rollup path over fresh data); a
+  duplicate-email submit returned the inline **"already exists"** field error (P2002
+  caught, **not** a 500). Test patient cleaned up afterward (count back to 2).
+
+**Verification:** `npm run dev` → at `/admin`: create a patient, add/edit/delete an
+appointment + prescription, end a recurring appointment — all persist across reload.
 
 ## Phase 5 — Auth + Patient Portal (`/`)
 
