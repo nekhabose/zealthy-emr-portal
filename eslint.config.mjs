@@ -13,6 +13,22 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Allow deliberately-unused, `_`-prefixed identifiers. Server Actions consumed by
+  // `useActionState` must keep the `(prevState, formData)` signature even when a
+  // given action (e.g. delete) reads neither — naming them `_prev`/`_formData`
+  // documents the intent, so the linter shouldn't flag them.
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

@@ -7,7 +7,7 @@
 | 0     | Scaffold & tooling                   | ✅ Complete (2026-07-15) |
 | 1     | Data layer                           | ✅ Complete (2026-07-15) |
 | 2     | Shared domain logic                  | ✅ Complete (2026-07-15) |
-| 3     | Services & Server Actions (CRUD)     | ⬜ Not started  |
+| 3     | Services & Server Actions (CRUD)     | ✅ Complete (2026-07-15) |
 | 4     | Mini-EMR (`/admin`)                  | ⬜ Not started  |
 | 5     | Auth + Patient Portal (`/`)          | ⬜ Not started  |
 | 6     | Design system & motion polish        | ⬜ Not started  |
@@ -250,14 +250,90 @@ enum RefillSchedule { NONE WEEKLY MONTHLY }
 
 **Verification:** `npm test` (optionally `TZ=<zone> npm test` to confirm determinism).
 
-## Phase 3 — Services & Server Actions (CRUD)
+## Phase 3 — Services & Server Actions (CRUD)  ✅ COMPLETE (2026-07-15)
 
 **Goal:** all mutations + reads, framework-thin.
 
-- `lib/services/{patients,appointments,prescriptions}.ts` — pure DB functions (`listPatientsWithCounts`, `getPatientDetail`, `createPatient`, `updatePatient`, `createAppointment`, `updateAppointment`, `deleteAppointment`, `endRecurrence`, and prescription equivalents).
-- `app/admin/**/actions.ts` — Server Actions wrapping services, each: Zod-parse → service call → `revalidatePath`. Return typed `{ ok, errors }` for inline form validation.
-- Portal read helpers: `getPatientSummary(patientId, now)` (7-day appointments + 7-day refills + basic info) and `getPatientSchedule(patientId, now)` (3-month expansions), both built on Phase 2 utilities.
-- "**End recurring**" = Server Action setting `endsAt = now` (or a chosen date) — surfaced as a button on recurring items.
+- [x] **Pure mapper layer** `lib/services/mappers.ts` (**new, as-built**) — the row→DTO
+  assembly split out as PURE functions (no DB, no wall-clock): `expandAppointments`,
+  `expandRefills`, `toPatientListItem`, `toPatientSummary`, `toPatientSchedule`,
+  `isActivePrescription`, and the raw-record projectors. Built on the Phase-2
+  recurrence/window layer; unit-tested with fabricated rows.
+- [x] `lib/services/{patients,appointments,prescriptions,reference,portal}.ts` — thin
+  DB functions that query Prisma and delegate shaping to the mappers:
+  - patients: `listPatientsWithCounts(now)`, `getPatientDetail(id)`, `createPatient`, `updatePatient`.
+  - appointments: `createAppointment`, `updateAppointment`, `deleteAppointment`, `endAppointmentRecurrence`.
+  - prescriptions: `createPrescription`, `updatePrescription`, `deletePrescription`, `endPrescriptionRecurrence`.
+  - reference (**new, as-built**): `listMedications()`, `listDosages()` (ordered by seeded `sortOrder`) — the prescription form's option sources.
+  - portal: `getPatientSummary(patientId, now)` (7-day appts + 7-day refills + basics) and `getPatientSchedule(patientId, now)` (3-month expansions).
+- [x] `app/admin/actions.ts` — the admin Server Actions (matches the plan's
+  `admin/**/actions.ts`). Each: Zod-parse `FormData` → service call → `revalidatePath("/admin", "layout")` → typed `FormState` (`{ ok, errors?, message? }`) for inline form validation. Covers patient create/update, appointment create/update/delete/end-recurrence, and prescription create/update/delete/end-recurrence.
+- [x] "**End recurring**" = `endAppointmentRecurrenceAction` / `endPrescriptionRecurrenceAction`, setting `endsAt = now` by default (or a chosen date from the form) — to be surfaced as a button in Phase 4.
+- [x] **Tests:** pure mapper + action-helper **unit tests** (DB-free, in the default
+  `npm test` run) and a **live integration suite** (`npm run test:int`) that drives the
+  real service layer against Postgres.
+
+**Files:** `lib/services/mappers.ts`, `lib/services/patients.ts`, `lib/services/appointments.ts`, `lib/services/prescriptions.ts`, `lib/services/reference.ts`, `lib/services/portal.ts`, `lib/action-helpers.ts`, `app/admin/actions.ts`, `lib/types.ts` (added `AppointmentRecord`, `PrescriptionRecord`, `PatientDetail`, `FormState`), `tests/services-mappers.test.ts`, `tests/action-helpers.test.ts`, `tests/integration/services.test.ts`, `vitest.config.ts` (exclude integration), `vitest.integration.config.ts`, `package.json` (`test:int` script), `eslint.config.mjs` (`_`-prefix ignore).
+
+**Decisions & deviations from original plan (as-built):**
+
+- **Pure/impure split for testability.** The plan called the services "pure DB
+  functions". As-built, the genuinely testable logic (occurrence expansion + the
+  at-a-glance rollups) is extracted into `lib/services/mappers.ts` as pure functions;
+  the service files are the thin DB edge that fetches rows and delegates. This lets the
+  hard logic be unit-tested with fabricated rows (no DB) — matching Phase 2's
+  single-`now`-seam philosophy — while a separate integration suite proves the DB
+  wiring.
+- **`now` is injected into reads, read from the clock only at the edge.** Read helpers
+  (`listPatientsWithCounts`, `getPatientSummary`, `getPatientSchedule`) take an explicit
+  `now` so expansion stays deterministic; the Server Component (Phase 4/5) or Server
+  Action passes `new Date()`. Actions legitimately read the clock (e.g. end-recurrence
+  default), since they are the impure request edge.
+- **`FormState` return contract.** Actions return `{ ok, errors?, message? }` (typed in
+  `lib/types.ts`), shaped for React 19's `useActionState`. Field errors are built by
+  hand from `ZodError.issues` (`lib/action-helpers.fieldErrors`) so the mapping is
+  stable across Zod minor versions; a top-level refine (empty path) buckets under
+  `_form`. Duplicate-email inserts are caught (Prisma `P2002`) and returned as an inline
+  `email` field error instead of a 500.
+- **Action signatures lead with bound ids.** `updateXAction(id, prevState, formData)`,
+  `createAppointmentAction(patientId, prevState, formData)`, etc. — so Phase-4 forms
+  bind the id with `action.bind(null, id)` and hand the rest to `useActionState`.
+- **Single `app/admin/actions.ts`.** One co-located admin actions module (glob-matches
+  `admin/**/actions.ts`) rather than several; Phase 4 can split if a route needs it.
+  Helpers and the `FormState` type live in non-`"use server"` modules (`lib/*`) because a
+  `"use server"` file may only export async functions.
+- **Revalidation is coarse (`/admin` layout).** After any admin mutation we
+  `revalidatePath("/admin", "layout")`, refreshing the table and every patient-detail
+  page without threading `patientId` through delete/update actions.
+- **"Active prescription" = not discontinued.** For the admin "# active Rx" column, a
+  prescription is active iff `endsAt` is null or `endsAt >= now` (the EMR "currently
+  prescribed" meaning), deliberately independent of refill timing. Documented in the
+  mapper.
+- **"Upcoming appointments" counts records, not occurrences.** `upcomingAppointmentCount`
+  counts appointment ROWS with any occurrence on/after `now` (a recurring row counts
+  once), keeping the number bounded/intuitive; `nextAppointment` is the soonest
+  occurrence across all rows.
+- **Two Vitest projects.** `npm test` runs the pure unit suite (fast, DB-free,
+  CI-safe); `npm run test:int` runs the DB-backed integration suite against the local
+  Postgres (separate `vitest.integration.config.ts`, `fileParallelism` off). Integration
+  tests create throwaway rows under unique emails and cascade-delete them in
+  `afterAll`, never mutating the seeded sample patients.
+- **ESLint `_`-prefix ignore.** Added `argsIgnorePattern/varsIgnorePattern: "^_"` so the
+  `useActionState`-mandated but unused `_prev`/`_formData` params in delete actions don't
+  warn — keeping lint clean.
+
+**Validation (all green):**
+
+- `npm test` — **34/34 passing** (recurrence 17 + mappers 12 + action-helpers 5).
+- `npm run test:int` — **12/12 passing** against live Postgres: reference-list order,
+  create/read patient, duplicate-email `P2002`, add appointment + prescription,
+  at-a-glance rollups, 7-day summary + 3-month schedule expansion, edit, end-recurrence
+  truncation, per-patient isolation, update, delete. Seed counts unchanged afterward
+  (2 patients / 4 appts / 4 Rx).
+- `npm run typecheck`, `npm run lint`, `npm run build` — all clean (build still
+  prerenders `/`).
+
+**Verification:** `npm test && npm run test:int` (the latter needs the local Postgres up).
 
 ## Phase 4 — Mini-EMR (`/admin`)
 

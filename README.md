@@ -26,7 +26,8 @@ design direction live in [`Zealthy.md`](./Zealthy.md).
 | Auth               | **Auth.js / NextAuth v5** (Credentials provider) — *Phase 5*  |
 | Validation         | **Zod v4** — shared client/server schemas *(Phase 2)*         |
 | Date / recurrence  | **UTC-native** helpers (`lib/datetime.ts`) *(Phase 2)*        |
-| Tests              | **Vitest** — recurrence unit tests *(Phase 2)*                |
+| Data access        | **Service layer + Server Actions** (`lib/services/*`, `app/admin/actions.ts`) *(Phase 3)* |
+| Tests              | **Vitest** — unit (recurrence, mappers) + live integration *(Phase 3)* |
 | Deployment         | **Vercel** — *Phase 7*                                         |
 
 ### A note on Prisma versions
@@ -47,7 +48,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | **0** | **Scaffold & tooling**                     | ✅ **Complete** |
 | **1** | **Data layer (schema, migration, seed)**   | ✅ **Complete** |
 | **2** | **Shared domain logic (recurrence, windows, validation)** | ✅ **Complete** |
-| 3     | Services & Server Actions (CRUD)           | ⬜ Not started  |
+| **3** | **Services & Server Actions (CRUD)**       | ✅ **Complete** |
 | 4     | Mini-EMR (`/admin`)                        | ⬜ Not started  |
 | 5     | Auth + Patient Portal (`/`)                | ⬜ Not started  |
 | 6     | Design system & motion polish              | ⬜ Not started  |
@@ -70,6 +71,14 @@ expansion (`lib/recurrence.ts`), time-window builders (`lib/windows.ts`), UTC-sa
 arithmetic (`lib/datetime.ts`), Zod validation schemas (`lib/validation.ts`), and shared
 view-model DTOs (`lib/types.ts`) — plus a **Vitest** suite for the recurrence math. See
 [Shared domain logic](#shared-domain-logic-phase-2) below.
+
+**Phase 3 delivered:** the data-access layer both surfaces build on — a pure
+row→DTO mapper module (`lib/services/mappers.ts`), the DB service functions
+(`lib/services/{patients,appointments,prescriptions,reference,portal}.ts`), and the
+admin **Server Actions** (`app/admin/actions.ts`) that Zod-validate form input, call a
+service, revalidate, and return a typed `FormState`. Backed by DB-free unit tests **and**
+a live integration suite. See [Service & action layer](#service--action-layer-phase-3)
+below.
 
 ---
 
@@ -136,6 +145,46 @@ TZ=America/New_York npm test      # … under any timezone
 
 ---
 
+## Service & action layer (Phase 3)
+
+Both surfaces read and mutate data through a thin, framework-agnostic layer rather
+than touching Prisma from components:
+
+| Module                              | Responsibility                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `lib/services/mappers.ts`           | **Pure** row→DTO assembly — occurrence expansion, at-a-glance rollups, active-Rx predicate. No DB, no clock. |
+| `lib/services/patients.ts`          | `listPatientsWithCounts(now)`, `getPatientDetail(id)`, `createPatient`, `updatePatient`. |
+| `lib/services/appointments.ts`      | `createAppointment`, `updateAppointment`, `deleteAppointment`, `endAppointmentRecurrence`. |
+| `lib/services/prescriptions.ts`     | `createPrescription`, `updatePrescription`, `deletePrescription`, `endPrescriptionRecurrence`. |
+| `lib/services/reference.ts`         | `listMedications()`, `listDosages()` — the prescription form's option sources.       |
+| `lib/services/portal.ts`            | `getPatientSummary(patientId, now)` (7-day), `getPatientSchedule(patientId, now)` (3-month). |
+| `app/admin/actions.ts`              | Admin **Server Actions**: Zod-parse → service → `revalidatePath` → typed `FormState`. |
+
+**Design.** The genuinely testable logic (expanding stored anchors into occurrences,
+computing the admin table's counts) is isolated as **pure functions** in `mappers.ts`;
+the service files are the thin DB edge that fetches rows and delegates. Read helpers take
+an explicit `now` (the same single-seam pattern as Phase 2), so expansion is
+deterministic and unit-testable; the calling Server Component / Action supplies
+`new Date()` at the edge.
+
+**Server Actions** return a serialisable `{ ok, errors?, message? }` (`FormState`) shaped
+for React 19's `useActionState`, so the Phase-4/5 forms get inline field errors. A
+duplicate-email insert is caught (Prisma `P2002`) and returned as an `email` field error
+rather than a 500. "**End recurring**" is an action that sets `endsAt` (defaulting to
+now), truncating future occurrences.
+
+**Tests.** Two suites:
+
+```bash
+npm test          # pure unit tests — recurrence + mappers + action helpers (no DB, CI-safe)
+npm run test:int  # live integration — drives the service layer against a real Postgres
+```
+
+The integration suite creates throwaway rows under unique emails and cascade-deletes them
+afterward, so it never disturbs the seeded sample patients.
+
+---
+
 ## Getting started (local)
 
 **Prerequisites:** Node.js 20+ (Node 22+/24 LTS recommended) and a Postgres database
@@ -184,7 +233,8 @@ Both sample patients share the same password (portal login lands in **Phase 5**)
 | `npm run start`     | Serve the production build                          |
 | `npm run lint`      | ESLint                                              |
 | `npm run typecheck` | TypeScript type-check (no emit)                     |
-| `npm test`          | Run the Vitest unit suite (recurrence math)         |
+| `npm test`          | Run the Vitest unit suite (recurrence, mappers, helpers) |
+| `npm run test:int`  | Run the live integration suite (needs a running Postgres) |
 | `npm run test:watch`| Vitest in watch mode                                |
 | `npm run db:migrate`| Create/apply migrations (`prisma migrate dev`)      |
 | `npm run db:seed`   | Seed sample + reference data (idempotent)           |
