@@ -24,8 +24,9 @@ design direction live in [`Zealthy.md`](./Zealthy.md).
 | Styling            | **Tailwind CSS v4** (CSS-first config)                        |
 | Database           | **Postgres** (Neon in production) via **Prisma 6**            |
 | Auth               | **Auth.js / NextAuth v5** (Credentials provider) — *Phase 5*  |
-| Validation         | **Zod** — *Phase 2*                                            |
-| Date / recurrence  | **date-fns** — *Phase 2*                                       |
+| Validation         | **Zod v4** — shared client/server schemas *(Phase 2)*         |
+| Date / recurrence  | **UTC-native** helpers (`lib/datetime.ts`) *(Phase 2)*        |
+| Tests              | **Vitest** — recurrence unit tests *(Phase 2)*                |
 | Deployment         | **Vercel** — *Phase 7*                                         |
 
 ### A note on Prisma versions
@@ -45,7 +46,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | ----- | ------------------------------------------ | -------------- |
 | **0** | **Scaffold & tooling**                     | ✅ **Complete** |
 | **1** | **Data layer (schema, migration, seed)**   | ✅ **Complete** |
-| 2     | Shared domain logic (recurrence, windows)  | ⬜ Not started  |
+| **2** | **Shared domain logic (recurrence, windows, validation)** | ✅ **Complete** |
 | 3     | Services & Server Actions (CRUD)           | ⬜ Not started  |
 | 4     | Mini-EMR (`/admin`)                        | ⬜ Not started  |
 | 5     | Auth + Patient Portal (`/`)                | ⬜ Not started  |
@@ -63,6 +64,12 @@ Prisma datasource, environment templates, and this README.
 patients and reference lists from a local copy of the exercise gist
 (`prisma/seed-data.json`). Recurrence is stored as an anchor + cadence + optional
 `endsAt` and expanded at read time in Phase 2 — see the data-model section below.
+
+**Phase 2 delivered:** the shared domain layer both surfaces rely on — recurrence
+expansion (`lib/recurrence.ts`), time-window builders (`lib/windows.ts`), UTC-safe date
+arithmetic (`lib/datetime.ts`), Zod validation schemas (`lib/validation.ts`), and shared
+view-model DTOs (`lib/types.ts`) — plus a **Vitest** suite for the recurrence math. See
+[Shared domain logic](#shared-domain-logic-phase-2) below.
 
 ---
 
@@ -90,6 +97,42 @@ enum RefillSchedule { NONE WEEKLY MONTHLY }
   Concrete occurrences are expanded within a window at read time (Phase 2).
 - **The seed is idempotent:** patients are upserted by `email` and their children fully
   replaced on each run, so re-seeding converges instead of duplicating.
+
+---
+
+## Shared domain logic (Phase 2)
+
+The two surfaces share one small, well-tested domain layer under `lib/` rather than
+duplicating date math or validation:
+
+| Module              | Responsibility                                                                 |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `lib/datetime.ts`   | Timezone-safe **UTC** date arithmetic (`addUTCDays/Weeks/Months`, month diff).  |
+| `lib/recurrence.ts` | `expandOccurrences(anchor, cadence, start, end, endsAt?)` and `nextOccurrence`. |
+| `lib/windows.ts`    | `next7Days(now)` / `next3Months(now)` window builders (single injected `now`).  |
+| `lib/validation.ts` | Zod schemas for patient/appointment/prescription/credentials, shared by forms + Server Actions. |
+| `lib/types.ts`      | Serialisable view-model DTOs (`AppointmentOccurrence`, `PatientSummary`, …).    |
+
+**Why recurrence math runs in UTC.** Appointments/prescriptions store a single anchor +
+a cadence (`NONE`/`WEEKLY`/`MONTHLY`) + an optional `endsAt`; concrete occurrences are
+never persisted — they're expanded within a window at read time. That expansion is done
+with **native UTC arithmetic**, not date-fns' local-time helpers, because local-time
+arithmetic depends on the machine's timezone and shifts by the DST hour — so the same
+appointment would expand to different instants on a Pacific dev laptop vs. a UTC server.
+UTC has no DST, so expansion is identical on every machine. Each occurrence is also
+computed relative to the *original* anchor, so month-end recurrences don't drift
+(Jan 31 → Feb 28 → **Mar 31**, not Mar 28).
+
+**Tests.** `npm test` runs the Vitest suite (`tests/recurrence.test.ts`, 17 cases:
+weekly/monthly across month boundaries, month-end clamping, `endsAt` truncation,
+one-off/`NONE`, 3-month cap, past-anchor fast-forward). Timezone-independence is verified
+by running it under several zones:
+
+```bash
+npm test                          # default
+TZ=UTC npm test                   # identical results …
+TZ=America/New_York npm test      # … under any timezone
+```
 
 ---
 
@@ -141,6 +184,8 @@ Both sample patients share the same password (portal login lands in **Phase 5**)
 | `npm run start`     | Serve the production build                          |
 | `npm run lint`      | ESLint                                              |
 | `npm run typecheck` | TypeScript type-check (no emit)                     |
+| `npm test`          | Run the Vitest unit suite (recurrence math)         |
+| `npm run test:watch`| Vitest in watch mode                                |
 | `npm run db:migrate`| Create/apply migrations (`prisma migrate dev`)      |
 | `npm run db:seed`   | Seed sample + reference data (idempotent)           |
 | `npm run db:reset`  | Drop, re-migrate, and re-seed the database          |

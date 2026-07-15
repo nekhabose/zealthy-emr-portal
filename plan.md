@@ -6,7 +6,7 @@
 | ----- | ------------------------------------ | -------------- |
 | 0     | Scaffold & tooling                   | ✅ Complete (2026-07-15) |
 | 1     | Data layer                           | ✅ Complete (2026-07-15) |
-| 2     | Shared domain logic                  | ⬜ Not started  |
+| 2     | Shared domain logic                  | ✅ Complete (2026-07-15) |
 | 3     | Services & Server Actions (CRUD)     | ⬜ Not started  |
 | 4     | Mini-EMR (`/admin`)                  | ⬜ Not started  |
 | 5     | Auth + Patient Portal (`/`)          | ⬜ Not started  |
@@ -179,17 +179,76 @@ enum RefillSchedule { NONE WEEKLY MONTHLY }
 
 **Verification:** `npm run db:studio` (or `npx prisma studio`) shows patients with nested rows; medications/dosages populated.
 
-## Phase 2 — Shared domain logic (the hard part)
+## Phase 2 — Shared domain logic (the hard part)  ✅ COMPLETE (2026-07-15)
 
 **Goal:** one well-tested module both surfaces rely on.
 
-- `lib/recurrence.ts`:
-  - `expandOccurrences(anchor, schedule, windowStart, windowEnd, endsAt?)` → `Date[]`. Steps by `addWeeks`/`addMonths` (date-fns), stops at `min(windowEnd, endsAt)`, handles past-anchor edge cases, caps iterations defensively.
-  - `nextOccurrence(...)` helper for "next upcoming" in summaries.
-- `lib/windows.ts`: `next7Days(now)`, `next3Months(now)` window builders (single `now()` seam so tests are deterministic).
-- `lib/validation.ts`: Zod schemas — `patientSchema`, `appointmentSchema`, `prescriptionSchema` (medication ∈ reference list, dosage ∈ reference list, quantity ≥ 1, valid dates, repeat/refill enums). Reused by forms and Server Actions.
-- `lib/types.ts`: shared DTOs (`OccurrenceView`, `PatientSummary`, etc.).
-- **Unit tests** (Vitest) for `recurrence.ts` — weekly/monthly across month boundaries, `endsAt` truncation, none-schedule single occurrence, 3-month cap.
+- [x] `lib/datetime.ts` (**new, as-built**) — timezone-safe UTC arithmetic primitives
+  (`addUTCDays`, `addUTCWeeks`, `addUTCMonths` with day-of-month clamping,
+  `differenceInUTCMonths`). Isolates all tz-sensitive date math in one place.
+- [x] `lib/recurrence.ts`:
+  - `expandOccurrences(anchor, cadence, windowStart, windowEnd, endsAt?)` → `Date[]`.
+    Steps by `addUTC{Weeks,Months}` from the original anchor, stops at
+    `min(windowEnd, endsAt)`, fast-forwards past-anchor cases in O(1), caps iterations
+    defensively (`MAX_ITERATIONS = 1000`).
+  - `nextOccurrence(anchor, cadence, from, endsAt?)` helper for "next upcoming" in
+    summaries / the admin table's next-appointment column.
+- [x] `lib/windows.ts`: `next7Days(now)`, `next3Months(now)` window builders (single
+  `now` seam passed by callers so services stay pure and tests are deterministic).
+- [x] `lib/validation.ts`: Zod schemas — `patientSchema` / `patientUpdateSchema`,
+  `appointmentSchema`, `prescriptionSchema` + `makePrescriptionSchema(meds, doses)`
+  (medication ∈ reference list, dosage ∈ reference list, quantity ≥ 1, coerced
+  dates, repeat/refill enums, `endsAt ≥ anchor`), and `credentialsSchema` for the
+  Phase-5 login. Reused by forms and Server Actions.
+- [x] `lib/types.ts`: shared DTOs (`OccurrenceView`, `AppointmentOccurrence`,
+  `RefillOccurrence`, `PatientBasics`, `PatientSummary`, `PatientSchedule`,
+  `PatientListItem`).
+- [x] **Unit tests** (Vitest) `tests/recurrence.test.ts` — 17 cases: NONE single
+  occurrence + inclusive bounds, weekly/monthly across month boundaries, Jan-31
+  month-end clamp with no post-clamp drift, `endsAt` truncation (inside window +
+  before window), 3-month cap, past-anchor fast-forward, and `nextOccurrence`
+  (future/past one-off, past-anchor weekly, `endsAt` cutoff).
+
+**Files:** `lib/datetime.ts`, `lib/recurrence.ts`, `lib/windows.ts`, `lib/validation.ts`,
+`lib/types.ts`, `tests/recurrence.test.ts`, `vitest.config.ts`, `package.json`
+(`test`/`test:watch` scripts + `vitest` devDependency).
+
+**Decisions & deviations from original plan (as-built):**
+
+- **Recurrence math is done in UTC, not via date-fns local arithmetic.** date-fns
+  `addWeeks`/`addMonths` operate on *local wall-clock time*, so their output depends on
+  the ambient `process.env.TZ` and shifts by the DST hour — a Pacific dev laptop and a
+  UTC Vercel server would expand the *same* appointment to *different* instants (a
+  latent production bug). Phase 2 therefore adds `lib/datetime.ts` (native UTC
+  arithmetic; UTC has no DST) and the recurrence/window layers build on it. Determinism
+  is proven by running the suite under `TZ=UTC`, `America/New_York`, `Asia/Kolkata`
+  (:30 offset) and `Pacific/Chatham` (:45 offset) — all 17 tests pass identically.
+  date-fns stays a dependency for later display-formatting use.
+- **Every occurrence is computed relative to the ORIGINAL anchor** (`addUTCMonths(anchor,
+  n)`), never by stepping the previous occurrence. This keeps month-end semantics stable
+  — Jan 31 → Feb 28 → **Mar 31** (back to the 31st), not the Feb 28 → Mar 28 drift you
+  get from re-anchoring off a clamped date. Covered by a dedicated test.
+- **Reference-list membership is a schema factory, not a hardcoded enum.** Medications
+  and dosages are seeded/dynamic, so `makePrescriptionSchema(medications, dosages)`
+  refines the base `prescriptionSchema` against the sets fetched at request time. A base
+  `prescriptionSchema` (non-empty strings) is also exported for callers without the list.
+- **Zod v4 API.** Uses top-level `z.email()`, `z.coerce.{date,number}`, and
+  `z.preprocess` (empty date input → `undefined` for optional `endsAt`), matching the
+  installed `zod@4.4.3`.
+- **Vitest 4** added as the test runner (`vitest.config.ts`, node environment, scoped to
+  `tests/**`). No `@testing-library`/DOM env needed — Phase 2 is pure domain logic.
+
+**Validation (all green):**
+
+- `npm test` — **17/17 passing**; re-run under `TZ=UTC`, `America/New_York`,
+  `Asia/Kolkata`, `Pacific/Chatham` — identical results (timezone-independent).
+- **Seed-anchor smoke:** the real seed appointment `2026-04-16T16:30:00-07:00`
+  (= `23:30Z`) expanded weekly from a fixed `now = 2026-07-15Z` → 1 occurrence in the
+  next 7 days (Jul 16 23:30Z), **13** in the next 3 months (Jul 16 → Oct 8, every one
+  exactly 7 days apart, no drift); `endsAt` before the window correctly yields `null`.
+- `npm run typecheck`, `npm run lint`, `npm run build` — all clean.
+
+**Verification:** `npm test` (optionally `TZ=<zone> npm test` to confirm determinism).
 
 ## Phase 3 — Services & Server Actions (CRUD)
 
