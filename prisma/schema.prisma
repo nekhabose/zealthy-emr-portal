@@ -1,0 +1,18 @@
+// Zealthy — Prisma schema
+//
+// Phase 0 (scaffold): datasource + generator only.
+// Data models (Patient, Appointment, Prescription, Medication, Dosage, and the
+// RepeatSchedule / RefillSchedule enums) are introduced in Phase 1 — Data layer.
+//
+// Passwords are stored in plaintext by deliberate design: the exercise brief
+// requires settable patient passwords to ease testing. This is a non-production
+// choice and is documented in the README.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
