@@ -1,26 +1,126 @@
 @import "tailwindcss";
 
+/*
+ * Zealthy design system — Phase 6.
+ *
+ * A warm, editorial healthcare palette (cream + white grounds, green reserved for
+ * primary actions and emphasis) encoded as Tailwind v4 theme tokens. Because the
+ * config is CSS-first in Tailwind v4, every `--color-*` here generates the matching
+ * `bg-*` / `text-* ` / `border-*` utilities used across both surfaces. The default
+ * Tailwind palette (zinc/emerald/red/white) stays available underneath.
+ */
+
+@theme {
+  /* Brand greens — used sparingly, for primary actions + emphasis only. */
+  --color-brand: #267a58; /* interactive green: links, accents, focus */
+  --color-brand-dark: #184d3b; /* primary buttons, strong headings */
+  --color-brand-hover: #1f6247; /* button hover, between the two greens */
+
+  /* Warm pastel grounds + surfaces. */
+  --color-cream: #f8f4ec; /* primary page background */
+  --color-mint: #dcefe5; /* soft green surface / selected states */
+  --color-peach: #f2d8ca; /* accent surface */
+  --color-lavender: #e8e2f2; /* accent surface */
+
+  /* Text + hairlines. */
+  --color-ink: #18201d; /* primary text */
+  --color-muted: #66706b; /* secondary text */
+  --color-hairline: #dde3df; /* subtle borders */
+
+  /* Editorial sans (Manrope) with a system fallback stack; mono for credentials. */
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Soft, layered shadows (very light, per the brief — no heavy shadows). */
+  --shadow-soft: 0 1px 2px rgba(24, 32, 29, 0.04),
+    0 8px 24px -12px rgba(24, 32, 29, 0.12);
+  --shadow-lift: 0 2px 4px rgba(24, 32, 29, 0.05),
+    0 18px 40px -18px rgba(24, 32, 29, 0.22);
+
+  /* Signature spring easing echoing the motion brief (stiffness 260 / damping 24). */
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light; /* the design is a single warm light system — no dark inversion */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Accessible, brand-tinted focus ring for keyboard users on every interactive element. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---- Decorative animations (skeleton shimmer, floating hero shapes) --------- */
+
+@keyframes zealthy-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes zealthy-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.zealthy-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-hairline) 55%, white);
+}
+.zealthy-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.65),
+    transparent
+  );
+  animation: zealthy-shimmer 1.6s ease-in-out infinite;
+}
+
+.zealthy-float {
+  animation: zealthy-float 6s ease-in-out infinite;
+}
+
+/* ---- Reduced motion: honor the OS setting everywhere -----------------------
+ * Framer Motion components additionally consult useReducedMotion(); this covers
+ * the CSS-driven decorative loops (shimmer, float) and smooth scroll. Interaction
+ * feedback (color/opacity on hover/press) is preserved. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .zealthy-skeleton::after,
+  .zealthy-float {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

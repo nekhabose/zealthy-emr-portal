@@ -41,6 +41,7 @@ import { AppointmentRow } from "@/components/admin/AppointmentRow";
 import { PrescriptionRow } from "@/components/admin/PrescriptionRow";
 import { Disclosure } from "@/components/admin/Disclosure";
 import { cardClass } from "@/components/ui/controls";
+import { PageTransition, Reveal } from "@/components/ui/motion";
 
 export const dynamic = "force-dynamic";
 
@@ -60,40 +61,46 @@ export default async function PatientRecordPage({
   const { patient, appointments, prescriptions } = detail;
 
   return (
-    <div className="space-y-8">
+    <PageTransition className="space-y-8">
       <div>
-        <Link href="/admin" className="text-sm text-emerald-800 hover:underline">
+        <Link
+          href="/admin"
+          className="text-sm font-semibold text-brand underline-offset-2 hover:underline"
+        >
           ← Back to patients
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{patient.name}</h1>
-        <p className="mt-1 text-sm text-zinc-500">{patient.email}</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+          {patient.name}
+        </h1>
+        <p className="mt-1 text-[15px] text-muted">{patient.email}</p>
       </div>
 
       {/* 1. Basic info -------------------------------------------------------- */}
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold tracking-tight">Basic info</h2>
-        <div className={cardClass}>
-          <PatientForm
-            action={updatePatientAction.bind(null, patient.id)}
-            mode="edit"
-            defaults={{ name: patient.name, email: patient.email }}
-            submitLabel="Save changes"
-          />
-        </div>
-      </section>
+      <Reveal>
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold tracking-tight text-ink">Basic info</h2>
+          <div className={cardClass}>
+            <PatientForm
+              action={updatePatientAction.bind(null, patient.id)}
+              mode="edit"
+              defaults={{ name: patient.name, email: patient.email }}
+              submitLabel="Save changes"
+            />
+          </div>
+        </section>
+      </Reveal>
 
       {/* 2. Appointments ------------------------------------------------------ */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">
+      <Reveal>
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold tracking-tight text-ink">
             Appointments{" "}
-            <span className="text-sm font-normal text-zinc-400">
+            <span className="text-sm font-medium text-muted">
               ({appointments.length})
             </span>
           </h2>
-        </div>
 
-        <div className={`${cardClass} space-y-4`}>
+          <div className={`${cardClass} space-y-4`}>
           <Disclosure label="Add appointment">
             <AppointmentForm
               action={createAppointmentAction.bind(null, patient.id)}
@@ -102,7 +109,7 @@ export default async function PatientRecordPage({
           </Disclosure>
 
           {appointments.length === 0 ? (
-            <p className="text-sm text-zinc-500">No appointments yet.</p>
+            <p className="text-sm text-muted">No appointments yet.</p>
           ) : (
             <ul className="space-y-3">
               {appointments.map((a) => (
@@ -129,21 +136,21 @@ export default async function PatientRecordPage({
               ))}
             </ul>
           )}
-        </div>
-      </section>
+          </div>
+        </section>
+      </Reveal>
 
       {/* 3. Prescriptions ----------------------------------------------------- */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">
+      <Reveal>
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold tracking-tight text-ink">
             Prescriptions{" "}
-            <span className="text-sm font-normal text-zinc-400">
+            <span className="text-sm font-medium text-muted">
               ({prescriptions.length})
             </span>
           </h2>
-        </div>
 
-        <div className={`${cardClass} space-y-4`}>
+          <div className={`${cardClass} space-y-4`}>
           <Disclosure label="Add prescription">
             <PrescriptionForm
               action={createPrescriptionAction.bind(null, patient.id)}
@@ -154,7 +161,7 @@ export default async function PatientRecordPage({
           </Disclosure>
 
           {prescriptions.length === 0 ? (
-            <p className="text-sm text-zinc-500">No prescriptions yet.</p>
+            <p className="text-sm text-muted">No prescriptions yet.</p>
           ) : (
             <ul className="space-y-3">
               {prescriptions.map((p) => (
@@ -189,8 +196,9 @@ export default async function PatientRecordPage({
               ))}
             </ul>
           )}
-        </div>
-      </section>
-    </div>
+          </div>
+        </section>
+      </Reveal>
+    </PageTransition>
   );
 }

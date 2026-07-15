@@ -21,7 +21,9 @@ design direction live in [`Zealthy.md`](./Zealthy.md).
 | ------------------ | ------------------------------------------------------------- |
 | Framework          | **Next.js 16** (App Router, full-stack) + **React 19**        |
 | Language           | **TypeScript**                                                |
-| Styling            | **Tailwind CSS v4** (CSS-first config)                        |
+| Styling            | **Tailwind CSS v4** (CSS-first config) + a warm token-based design system *(Phase 6)* |
+| Motion             | **Framer Motion** (the `motion` package) — reveals, staggers, animated nav, reduced-motion aware *(Phase 6)* |
+| Fonts              | **Manrope** (editorial sans) + **Geist Mono**, self-hosted via `next/font` *(Phase 6)* |
 | Database           | **Postgres** (Neon in production) via **Prisma 6**            |
 | Auth               | **Auth.js / NextAuth v5** (Credentials provider, JWT sessions) |
 | Validation         | **Zod v4** — shared client/server schemas *(Phase 2)*         |
@@ -51,7 +53,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | **3** | **Services & Server Actions (CRUD)**       | ✅ **Complete** |
 | **4** | **Mini-EMR (`/admin`)**                    | ✅ **Complete** |
 | **5** | **Auth + Patient Portal (`/`)**            | ✅ **Complete** |
-| 6     | Design system & motion polish              | ⬜ Not started  |
+| **6** | **Design system & motion polish**          | ✅ **Complete** |
 | 7     | Deploy, docs, ship                         | ⬜ Not started  |
 
 **Phase 0 delivered:** a running Next.js + TypeScript + Tailwind skeleton, the
@@ -93,6 +95,16 @@ appointments + next-7-day refills), and 3-month drill-downs for appointments and
 prescriptions. Every read is scoped to the signed-in `patientId`, guarded by both a
 `proxy.ts` redirect and a `requirePatient()` check next to the data. See
 [Patient portal](#patient-portal-phase-5) below.
+
+**Phase 6 delivered:** the **design system & motion polish** applied across both
+surfaces — a warm cream/white palette with green reserved for primary actions, Manrope
+editorial type, rounded cards with soft shadows, pill buttons, soft pastel status chips,
+and a disciplined **Framer Motion** layer (scroll reveals, staggered tiles, an animated
+segmented nav, per-route transitions) that fully honors `prefers-reduced-motion`. The
+login page becomes an editorial two-column hero; the portal gains at-a-glance stat tiles,
+a sticky blurred header, and a mobile bottom nav; both surfaces get shimmer skeleton
+loaders. **No application logic, data model, or API changed** — Phase 6 is purely
+presentational. See [Design system & motion](#design-system--motion-phase-6) below.
 
 ---
 
@@ -233,8 +245,9 @@ Phase-3 services and actions, with no changes to that layer.
   mismatch). Timestamps use local getters (so the wall-clock round-trips through
   `datetime-local`); date-only values use UTC getters (so `@db.Date` values don't shift a
   day).
-- **Styling is clean-but-basic** (Tailwind utilities, a little brand green); the full
-  design system and motion land in Phase 6.
+- **Styling** now runs on the shared Phase-6 design system (warm tokens, rounded cards,
+  pill buttons, motion) — the EMR stays a touch denser/table-first than the consumer
+  portal, but on the same primitives.
 
 ### Try it
 
@@ -295,6 +308,58 @@ npm run dev            # → http://localhost:3000/
 
 Sign in with a seeded credential (below) or a patient you created in `/admin`, review the
 7-day dashboard, open the two drill-downs, then sign out.
+
+---
+
+## Design system & motion (Phase 6)
+
+Phase 6 applies the [`Zealthy.md`](./Zealthy.md) visual direction across both surfaces —
+**purely presentational**: no route, service, action, schema, or data-model change.
+
+### Tokens & type
+
+- **Palette as Tailwind v4 theme tokens** in `app/globals.css` (`@theme`): warm cream
+  (`#F8F4EC`) and white grounds, soft mint / peach / lavender accent surfaces, and the two
+  brand greens (`#184D3B` / `#267A58`) **reserved for primary actions and emphasis**. Each
+  `--color-*` generates the matching `bg-*` / `text-*` / `border-*` utility, so the whole
+  app restyled without touching the default Tailwind palette underneath.
+- **Editorial type:** **Manrope** for headlines + body and **Geist Mono** for the sample
+  credential, self-hosted via `next/font` (no layout shift, no external requests).
+- **Shared primitives** (`components/ui/controls.tsx`) keep their Phase-4/5 export names,
+  so every existing form/list picked up the new look with **zero call-site churn**: rounded
+  cards + soft shadows, **pill buttons** with a press micro-interaction (`active:scale-0.98`),
+  large rounded inputs with a mint focus ring, soft pastel `Chip`s, plus new `PageHeader`,
+  `StatCard`, and shimmer `Skeleton` helpers.
+
+### Motion (`components/ui/motion.tsx`)
+
+A small, disciplined set of Framer Motion wrappers — used to guide attention, not decorate
+everything — each consulting `useReducedMotion()`:
+
+| Primitive        | Where it's used                                                        |
+| ---------------- | ---------------------------------------------------------------------- |
+| `Reveal`         | Fade + gentle rise as a section scrolls into view (runs once).          |
+| `Stagger` / `StaggerItem` | The dashboard's at-a-glance stat tiles enter in sequence.      |
+| `PageTransition` | A short opacity + translateY as each route mounts (< 600 ms).           |
+| Animated nav pill | The portal's segmented control slides its green indicator via a shared-layout (`layoutId`) spring `{stiffness 260, damping 24, mass 0.8}`. |
+
+The login form adds a **restrained shake** on a rejected sign-in. Card/row hovers lift
+≤ 4 px; button press scales to 0.98 — all within the brief's motion limits.
+
+### Accessibility & reduced motion
+
+- **WCAG-minded:** semantic headings, visible brand-tinted `:focus-visible` rings, chips
+  never rely on colour alone (the cadence text carries the meaning), large touch targets.
+- **`prefers-reduced-motion: reduce`** is honored two ways: the motion primitives drop all
+  transforms (leaving a short opacity change, content immediately visible), and a global CSS
+  rule disables the decorative shimmer/float loops and smooth scrolling. Interaction feedback
+  is preserved.
+
+### Responsive
+
+Layouts are **recomposed**, not stacked: the login hero collapses two columns to one, and
+the authenticated portal swaps its header segmented-nav for a fixed, thumb-friendly
+**bottom navigation** on mobile.
 
 ---
 

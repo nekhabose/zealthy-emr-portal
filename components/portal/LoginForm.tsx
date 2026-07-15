@@ -4,10 +4,11 @@
 //
 // Client component on React 19's `useActionState`: the third tuple value is the pending
 // flag (no separate `useFormStatus` child needed) and the first carries the typed
-// `FormState` for inline field + form errors. Mirrors the admin forms' conventions, and
-// reuses the shared UI primitives so both surfaces feel consistent ahead of Phase 6.
+// `FormState` for inline field + form errors. Phase 6 adds a small, restrained shake on
+// a failed sign-in (disabled under reduced-motion) and the shared pill-button styling.
 
 import { useActionState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { loginAction } from "@/app/(portal)/actions";
 import { INITIAL_FORM_STATE } from "@/lib/types";
 import {
@@ -19,6 +20,8 @@ import {
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(loginAction, INITIAL_FORM_STATE);
+  const reduce = useReducedMotion();
+  const hasFormError = Boolean(state.errors?._form?.length);
 
   return (
     <form action={action} className="space-y-4" noValidate>
@@ -46,7 +49,18 @@ export function LoginForm() {
         />
       </Field>
 
-      <FormNotice state={state} />
+      {/* Restrained shake on a rejected sign-in; a plain fade under reduced motion. */}
+      <motion.div
+        key={hasFormError ? "err" : "ok"}
+        animate={
+          hasFormError && !reduce ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }
+        }
+        transition={{ duration: 0.35 }}
+        role="status"
+        aria-live="polite"
+      >
+        <FormNotice state={state} />
+      </motion.div>
 
       <button type="submit" disabled={pending} className={`${btnPrimary} w-full`}>
         {pending ? "Signing in…" : "Sign in"}

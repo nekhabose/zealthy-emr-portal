@@ -8,16 +8,22 @@ import Link from "next/link";
 import { createPatientAction } from "@/app/admin/actions";
 import { PatientForm } from "@/components/admin/PatientForm";
 import { cardClass } from "@/components/ui/controls";
+import { PageTransition } from "@/components/ui/motion";
 
 export default function NewPatientPage() {
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <PageTransition className="mx-auto max-w-xl space-y-6">
       <div>
-        <Link href="/admin" className="text-sm text-emerald-800 hover:underline">
+        <Link
+          href="/admin"
+          className="text-sm font-semibold text-brand underline-offset-2 hover:underline"
+        >
           ← Back to patients
         </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">New patient</h1>
-        <p className="mt-1 text-sm text-zinc-500">
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+          New patient
+        </h1>
+        <p className="mt-2 text-[15px] text-muted">
           Create a patient record and portal login.
         </p>
       </div>
@@ -29,6 +35,6 @@ export default function NewPatientPage() {
           submitLabel="Create patient"
         />
       </div>
-    </div>
+    </PageTransition>
   );
 }

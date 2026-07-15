@@ -46,7 +46,7 @@ export function PrescriptionRow({
 
   if (editing) {
     return (
-      <li className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4">
+      <li className="rounded-2xl border border-brand/30 bg-mint/30 p-4">
         <PrescriptionForm
           action={updateAction}
           mode="edit"
@@ -61,19 +61,19 @@ export function PrescriptionRow({
   }
 
   return (
-    <li className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <li className="flex flex-col gap-3 rounded-2xl border border-hairline p-4 transition-colors hover:border-brand/30 sm:flex-row sm:items-center sm:justify-between">
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium text-zinc-900">
+          <span className="font-semibold text-ink">
             {display.medication} · {display.dosage}
           </span>
           {display.isRecurring ? <Chip>{display.cadenceLabel}</Chip> : null}
         </div>
-        <p className="text-sm text-zinc-600">
+        <p className="text-sm text-muted">
           Qty {display.quantity} · Next refill {display.refillOn}
         </p>
         {display.endsAt ? (
-          <p className="text-xs text-zinc-500">Ends {display.endsAt}</p>
+          <p className="text-xs text-muted">Ends {display.endsAt}</p>
         ) : null}
       </div>
 

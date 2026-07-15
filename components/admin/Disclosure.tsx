@@ -28,7 +28,7 @@ export function Disclosure({
   }
 
   return (
-    <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50/60 p-4">
+    <div className="rounded-2xl border border-dashed border-hairline bg-cream/70 p-4">
       {children}
       <div className="mt-3">
         <button type="button" className={btnGhost} onClick={() => setOpen(false)}>

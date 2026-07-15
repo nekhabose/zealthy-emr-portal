@@ -1,28 +1,37 @@
-// Zealthy — shared UI primitives for the admin (mini-EMR) surface.
+// Zealthy — shared, presentational UI primitives for BOTH surfaces (Phase 6).
 //
-// Deliberately small and presentational: className constants + a couple of layout
-// helpers reused across the Phase-4 forms and lists. Full design-system polish
-// (tokens, motion, brand palette) is Phase 6; these keep Phase 4 clean-but-basic
-// and consistent. No "use client" directive — these are used inside client forms
-// (bundled with them) and by Server Components alike.
+// Class-token constants + small layout helpers on the Phase-6 design system: warm
+// cream/white grounds, rounded cards with soft shadows, pill buttons with a press
+// micro-interaction, large rounded inputs with a mint focus ring, and soft pastel
+// status chips. Export NAMES are kept stable from Phase 4/5 so every existing form
+// and list picks up the new look without a call-site change. No "use client" — these
+// are pure (no hooks) and bundle happily into client forms and Server Components alike.
 
 import type { ReactNode } from "react";
 import type { FormState } from "@/lib/types";
 
 // ---- Class tokens ------------------------------------------------------------
 
+/** Standard content card: rounded, minimal border, very soft shadow, spacious. */
 export const cardClass =
-  "rounded-xl border border-zinc-200 bg-white p-6 shadow-sm";
-export const inputClass =
-  "w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none transition-colors placeholder:text-zinc-400 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:cursor-not-allowed disabled:opacity-60";
-export const labelClass = "block text-sm font-medium text-zinc-700";
+  "rounded-3xl border border-hairline bg-white p-6 shadow-soft sm:p-7";
 
+/** Interactive/clickable card: adds the 3–4px hover lift + slightly deeper shadow. */
+export const cardInteractive =
+  `${cardClass} block transition duration-200 ease-spring hover:-translate-y-1 hover:border-brand/30 hover:shadow-lift`;
+
+export const inputClass =
+  "w-full rounded-xl border border-hairline bg-white px-4 py-2.5 text-[15px] text-ink shadow-sm outline-none transition-colors placeholder:text-muted/60 focus:border-brand focus:ring-4 focus:ring-mint disabled:cursor-not-allowed disabled:opacity-60";
+export const labelClass = "block text-sm font-semibold text-ink";
+
+// Pill buttons. `active:scale-[0.98]` is the press micro-interaction; the spring easing
+// + color transition give immediate, quiet feedback without any continuous animation.
 const btnBase =
-  "inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60";
-export const btnPrimary = `${btnBase} bg-emerald-800 text-white hover:bg-emerald-700`;
-export const btnSecondary = `${btnBase} border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50`;
+  "inline-flex items-center justify-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold transition duration-200 ease-spring active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60";
+export const btnPrimary = `${btnBase} bg-brand-dark text-white shadow-soft hover:bg-brand-hover`;
+export const btnSecondary = `${btnBase} border border-hairline bg-white text-ink hover:bg-mint/50`;
 export const btnDanger = `${btnBase} border border-red-200 bg-white text-red-700 hover:bg-red-50`;
-export const btnGhost = `${btnBase} text-zinc-600 hover:bg-zinc-100`;
+export const btnGhost = `${btnBase} text-muted hover:bg-mint/50 hover:text-ink`;
 
 // ---- Small components --------------------------------------------------------
 
@@ -46,7 +55,7 @@ export function Field({
         {label}
       </label>
       {children}
-      {hint ? <p className="text-xs text-zinc-500">{hint}</p> : null}
+      {hint ? <p className="text-xs text-muted">{hint}</p> : null}
       <FieldError messages={error} />
     </div>
   );
@@ -55,7 +64,7 @@ export function Field({
 /** Inline, per-field validation messages (rendered from a `FormState.errors` entry). */
 export function FieldError({ messages }: { messages?: string[] }) {
   if (!messages?.length) return null;
-  return <p className="text-xs font-medium text-red-600">{messages.join(". ")}</p>;
+  return <p className="text-xs font-semibold text-red-600">{messages.join(". ")}</p>;
 }
 
 /**
@@ -66,22 +75,102 @@ export function FieldError({ messages }: { messages?: string[] }) {
 export function FormNotice({ state }: { state: FormState }) {
   if (state.errors?._form?.length) {
     return (
-      <p className="text-sm font-medium text-red-600">
+      <p className="text-sm font-semibold text-red-600">
         {state.errors._form.join(". ")}
       </p>
     );
   }
   if (state.ok && state.message) {
-    return <p className="text-sm font-medium text-emerald-700">{state.message}</p>;
+    return <p className="text-sm font-semibold text-brand">{state.message}</p>;
   }
   return null;
 }
 
-/** A soft status chip (e.g. a "Weekly" recurrence marker). */
-export function Chip({ children }: { children: ReactNode }) {
+const CHIP_TONES = {
+  mint: "bg-mint text-brand-dark",
+  peach: "bg-peach text-[#8a4b32]",
+  lavender: "bg-lavender text-[#574a78]",
+  neutral: "bg-cream text-muted ring-1 ring-inset ring-hairline",
+} as const;
+
+/** A soft pastel status chip (e.g. a "Weekly" recurrence marker). */
+export function Chip({
+  children,
+  tone = "mint",
+}: {
+  children: ReactNode;
+  tone?: keyof typeof CHIP_TONES;
+}) {
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20">
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${CHIP_TONES[tone]}`}
+    >
       {children}
     </span>
   );
+}
+
+/** Page/section header: optional eyebrow, big editorial title, subtitle, right action. */
+export function PageHeader({
+  eyebrow,
+  title,
+  subtitle,
+  action,
+}: {
+  eyebrow?: string;
+  title: string;
+  subtitle?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        {eyebrow ? (
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
+            {eyebrow}
+          </p>
+        ) : null}
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+          {title}
+        </h1>
+        {subtitle ? <p className="mt-2 text-[15px] text-muted">{subtitle}</p> : null}
+      </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+const STAT_TONES = {
+  mint: "bg-mint",
+  peach: "bg-peach",
+  lavender: "bg-lavender",
+  cream: "bg-cream",
+} as const;
+
+/** A large, warm summary tile: a big number/value over a soft pastel ground. */
+export function StatCard({
+  label,
+  value,
+  hint,
+  tone = "mint",
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+  tone?: keyof typeof STAT_TONES;
+}) {
+  return (
+    <div className={`rounded-3xl p-6 ${STAT_TONES[tone]}`}>
+      <p className="text-sm font-semibold text-ink/70">{label}</p>
+      <p className="mt-2 text-4xl font-bold tracking-tight text-brand-dark tabular-nums">
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-sm text-ink/60">{hint}</p> : null}
+    </div>
+  );
+}
+
+/** Shimmering skeleton block for elegant loading states (matches final layout). */
+export function Skeleton({ className = "" }: { className?: string }) {
+  return <div className={`zealthy-skeleton rounded-xl ${className}`} />;
 }

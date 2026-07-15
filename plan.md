@@ -10,7 +10,7 @@
 | 3     | Services & Server Actions (CRUD)     | ✅ Complete (2026-07-15) |
 | 4     | Mini-EMR (`/admin`)                  | ✅ Complete (2026-07-15) |
 | 5     | Auth + Patient Portal (`/`)          | ✅ Complete (2026-07-15) |
-| 6     | Design system & motion polish        | ⬜ Not started  |
+| 6     | Design system & motion polish        | ✅ Complete (2026-07-15) |
 | 7     | Deploy, docs, ship                   | ⬜ Not started  |
 
 ## Context
@@ -535,16 +535,116 @@ unused SVG assets.
 `Password123!` (or a patient created in `/admin`); confirm the 7-day summary and the
 3-month drill-downs are correct and isolated per patient; sign out.
 
-## Phase 6 — Design system & motion polish
+## Phase 6 — Design system & motion polish  ✅ COMPLETE (2026-07-15)
 
-**Goal:** apply `Zealthy.md` design direction across both surfaces.
+**Goal:** apply the `Zealthy.md` design direction across both surfaces — **UI only, zero
+functional change** (no route, service, action, schema, or data-model edit).
 
-- **Tokens:** encode the color palette (`#184D3B`, `#267A58`, `#DCEFE5`, `#F8F4EC`, `#F2D8CA`, `#E8E2F2`, text/border tokens) as Tailwind theme + CSS vars; cream/white page backgrounds; green reserved for primary actions. Manrope/Geist font via `next/font`.
-- **Components:** rounded cards (20–32px radius, soft shadows, minimal borders), pill buttons (press-scale 0.98), conversational large-field forms with progress/validation states, soft status chips, skeleton loaders (no full-screen spinners).
-- **Motion (Framer Motion):** staggered entrances, scroll-reveal on sections, animated tabs/accordions/segmented controls, page route transitions (opacity + small translateY), card hover (lift ≤4px, image scale ≤1.03), spring `{stiffness:260, damping:24, mass:0.8}`, timings per brief.
-- **Portal login as a mini editorial hero** (two-column, floating cards, organic shapes) — the one marketing moment.
-- **Mobile:** recompose (not stack) — one-column, bottom nav/sheets, large touch targets.
-- **A11y + reduced-motion:** WCAG 2.2 AA contrast, visible focus, semantic headings, `prefers-reduced-motion` disables parallax/floats/large scale and swaps slides for opacity. Gating requirement, not optional.
+- [x] **Tokens** (`app/globals.css`) — the full palette (`#184D3B`, `#267A58`, `#DCEFE5`,
+  `#F8F4EC`, `#F2D8CA`, `#E8E2F2`, ink/muted/hairline text + border tokens) encoded as
+  **Tailwind v4 `@theme` tokens**, so each `--color-*` generates the matching
+  `bg-*`/`text-*`/`border-*` utility. Warm cream page ground; green reserved for primary
+  actions + emphasis. Added soft `--shadow-soft`/`--shadow-lift`, an `--ease-spring`
+  easing token, and decorative `shimmer`/`float` keyframes. Removed the `create-next-app`
+  dark-mode scaffold (the design is a single warm light system).
+- [x] **Fonts** (`app/layout.tsx`) — **Manrope** (editorial sans) for headlines + body and
+  **Geist Mono** for the sample credential, self-hosted via `next/font/google`.
+- [x] **Shared primitives** (`components/ui/controls.tsx`) restyled in place with **stable
+  export names**: rounded cards + soft shadows, **pill buttons** with `active:scale-[0.98]`
+  press feedback, large rounded inputs with a mint focus ring, soft pastel `Chip` (tone
+  variants). Added `PageHeader`, `StatCard`, and a shimmer `Skeleton`.
+- [x] **Motion primitives** (`components/ui/motion.tsx`, **new**) — a small Framer Motion
+  (`motion` package) wrapper set: `Reveal` (scroll-in fade+rise), `Stagger`/`StaggerItem`
+  (sequenced tiles), `PageTransition` (per-route opacity + translateY). Every primitive
+  consults `useReducedMotion()`.
+- [x] **Portal login as an editorial hero** — two-column layout, oversized headline, warm
+  trust pills, a floating preview card + slow-floating organic background shapes, with the
+  login card and sample credential on the right; recomposes to one column on mobile.
+- [x] **Authenticated portal shell** — sticky, softly-blurred header; a **segmented nav
+  whose green pill slides between tabs** via a shared-layout (`layoutId`) spring
+  `{stiffness 260, damping 24, mass 0.8}`; a fixed **mobile bottom nav** with icons + large
+  touch targets.
+- [x] **Dashboard** — personalized greeting, at-a-glance **stat tiles** (7-day appts /
+  refills / details) entering with a stagger, and the two summary cards as rounded sections
+  with soft leading-icon list rows.
+- [x] **Admin** — sticky header with a brand mark; the patients table restyled (rounded
+  card, cream header, mint hover, brand links) inside a horizontal-scroll container; the
+  record page's sections wrapped in scroll reveals; rows/disclosures on the new tokens.
+- [x] **Skeleton loaders** — `app/(portal)/portal/loading.tsx` + `app/admin/loading.tsx`
+  mirror their pages' layout so content swaps in without reflow (CSS shimmer, no full-screen
+  spinner).
+- [x] **A11y + reduced motion** — brand-tinted `:focus-visible` rings; chips never rely on
+  colour alone; a restrained login-error shake; **`prefers-reduced-motion`** honored both in
+  the motion primitives (transforms dropped, opacity-only, content immediately visible) and
+  via a global CSS rule that disables the shimmer/float loops and smooth scroll.
+
+**Files:** `app/globals.css` (rewritten — theme tokens, keyframes, reduced-motion),
+`app/layout.tsx` (Manrope + Geist Mono), `components/ui/controls.tsx` (restyled + new
+primitives), `components/ui/motion.tsx` (**new**), `components/portal/PortalNav.tsx`
+(rewritten — animated `PortalNav` + new `PortalBottomNav`), `components/portal/LoginForm.tsx`
+(shake), `components/portal/schedule.tsx` (icon rows), `app/(portal)/page.tsx` (login hero),
+`app/(portal)/layout.tsx`, `app/(portal)/portal/layout.tsx` (sticky shell + bottom nav),
+`app/(portal)/portal/page.tsx` (stat tiles), `app/(portal)/portal/{appointments,prescriptions}/page.tsx`,
+`app/(portal)/portal/loading.tsx` (**new**), `app/admin/layout.tsx`, `app/admin/page.tsx`,
+`app/admin/patients/new/page.tsx`, `app/admin/patients/[id]/page.tsx`,
+`app/admin/loading.tsx` (**new**), `components/admin/{AppointmentRow,PrescriptionRow,Disclosure}.tsx`
+(token updates), `package.json` (`motion@12` dependency).
+
+**Decisions & deviations from original plan (as-built):**
+
+- **`motion` package, not `framer-motion`.** The library renamed to `motion` (imported from
+  `motion/react`); `motion@12.42.2` is the current release and the React 19 / Next 16 –
+  compatible successor, so it was chosen over the legacy `framer-motion` name the plan
+  listed.
+- **Tokens are Tailwind v4 `@theme`, not a `tailwind.config.ts` + CSS-var pair.** Since
+  Phase 0 the project is Tailwind v4 (CSS-first), so the palette lives in `@theme` in
+  `globals.css` and generates utilities directly — there is no JS config to mirror the vars
+  into. This supersedes the plan's "Tailwind theme + CSS vars" phrasing.
+- **Restyle in place under stable export names.** Rather than a new component library, the
+  Phase-4/5 primitives in `controls.tsx` kept their names and only their class tokens
+  changed, so **no page/form call-site needed editing** to adopt the new look — the lowest
+  -risk path to a full restyle. New primitives (`StatCard`, `Skeleton`, `PageHeader`) were
+  added alongside.
+- **Motion lives in `"use client"` wrappers around server-rendered children.** The pages
+  stayed Server Components; the motion primitives accept `children` as props, so no page had
+  to become a client component. Wrappers emit a `<div>`, so they're used around
+  cards/sections — never around `<li>`/`<tr>` (list/table semantics preserved).
+- **Reduced motion is enforced twice.** Framer Motion's `useReducedMotion()` neutralizes the
+  JS animations, and a global `@media (prefers-reduced-motion: reduce)` rule kills the
+  CSS-only decorative loops (shimmer, float) and smooth scroll — belt-and-braces, since the
+  two animation systems are independent.
+- **No dark mode.** The `create-next-app` `prefers-color-scheme: dark` scaffold was removed;
+  the brief's palette is a deliberate single warm light system, and a dark inversion would
+  fight it. `color-scheme: light` is pinned.
+- **Green is deliberately rare.** Per the brief ("do not overuse the primary green"), green
+  is confined to primary buttons, the active nav pill, links, and focus; cards and surfaces
+  carry cream/white/pastel, letting neutral space do the work.
+
+**Validation (all green):**
+
+- `npm run typecheck` — clean. `npm run lint` — clean.
+- `npm test` — **34/34** (Phase 0–3 suites unaffected — Phase 6 touched no logic).
+  `npm run test:int` — **12/12** against live Postgres (seed counts unchanged: 2 / 4 / 4).
+- `npm run build` — production build compiles; all 9 routes emit unchanged (`/`,
+  `/admin`, `/admin/patients/[id]` ƒ dynamic; `/admin/patients/new` ○ static;
+  `/portal`, `/portal/appointments`, `/portal/prescriptions` ƒ dynamic;
+  `/api/auth/[...nextauth]` ƒ; **ƒ Proxy**).
+- **Live smoke (`npm run dev`):**
+  - `/` renders the editorial hero (new headline, Manrope font var, cream tokens, sample
+    login) — **HTTP 200**.
+  - `/admin` renders the restyled patients table with both seeded patients — **200**.
+  - Unauthenticated `/portal` → **307** redirect to `/?callbackUrl=…` (guard intact).
+  - Real credentials login (Mark) → **302** + session cookie; `/portal` renders the greeting,
+    stat tiles, the animated nav pill (`portal-tab-pill`), and both 7-day sections — **200**;
+    Mark's dashboard contains **no** Lisa data (isolation intact).
+  - `/portal/appointments`, `/portal/prescriptions`, and a real patient record page all
+    **200** with their sections + populated Rx reference options.
+  - Dev log: **0** errors / warnings / hydration mismatches across the flow.
+
+**Verification:** `npm run dev` → visit `/` (hero + login), sign in, confirm the dashboard
+tiles + animated nav; toggle the OS "reduce motion" setting and reload — entrances become
+plain fades, the shimmer/float loops stop, and all content is immediately visible; shrink to
+a mobile width to see the bottom nav and one-column hero.
 
 ## Phase 7 — Deploy, docs, ship
 

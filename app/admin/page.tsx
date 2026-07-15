@@ -10,7 +10,8 @@ import Link from "next/link";
 import { listPatientsWithCounts } from "@/lib/services/patients";
 import { formatDateTime } from "@/lib/format";
 import { cadenceLabel } from "@/components/admin/cadence";
-import { Chip, btnPrimary } from "@/components/ui/controls";
+import { Chip, PageHeader, btnPrimary } from "@/components/ui/controls";
+import { PageTransition, Reveal } from "@/components/ui/motion";
 
 // Always render fresh: this is an internal tool over mutable data, not a cacheable page.
 export const dynamic = "force-dynamic";
@@ -19,89 +20,99 @@ export default async function AdminPatientsPage() {
   const patients = await listPatientsWithCounts(new Date());
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Patients</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {patients.length} {patients.length === 1 ? "patient" : "patients"} · appointments &amp; prescriptions at a glance
-          </p>
-        </div>
-        <Link href="/admin/patients/new" className={btnPrimary}>
-          + New patient
-        </Link>
-      </div>
+    <PageTransition className="space-y-8">
+      <PageHeader
+        eyebrow="Mini-EMR"
+        title="Patients"
+        subtitle={`${patients.length} ${
+          patients.length === 1 ? "patient" : "patients"
+        } · appointments & prescriptions at a glance`}
+        action={
+          <Link href="/admin/patients/new" className={btnPrimary}>
+            + New patient
+          </Link>
+        }
+      />
 
       {patients.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-12 text-center">
-          <p className="text-sm text-zinc-500">
+        <div className="rounded-3xl border border-dashed border-hairline bg-white p-14 text-center shadow-soft">
+          <p className="text-sm text-muted">
             No patients yet. Create the first one to get started.
           </p>
-          <Link href="/admin/patients/new" className={`${btnPrimary} mt-4`}>
+          <Link href="/admin/patients/new" className={`${btnPrimary} mt-5`}>
             + New patient
           </Link>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-zinc-200 text-sm">
-            <thead className="bg-zinc-50 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-4 py-3">Patient</th>
-                <th className="px-4 py-3">Upcoming</th>
-                <th className="px-4 py-3">Next appointment</th>
-                <th className="px-4 py-3">Active Rx</th>
-                <th className="px-4 py-3 text-right">&nbsp;</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-100">
-              {patients.map((p) => (
-                <tr key={p.id} className="hover:bg-zinc-50/70">
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/admin/patients/${p.id}`}
-                      className="font-medium text-emerald-800 hover:underline"
+        <Reveal>
+          <div className="overflow-hidden rounded-3xl border border-hairline bg-white shadow-soft">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-hairline text-sm">
+                <thead className="bg-cream text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                  <tr>
+                    <th className="px-5 py-3.5">Patient</th>
+                    <th className="px-5 py-3.5">Upcoming</th>
+                    <th className="px-5 py-3.5">Next appointment</th>
+                    <th className="px-5 py-3.5">Active Rx</th>
+                    <th className="px-5 py-3.5 text-right">&nbsp;</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-hairline">
+                  {patients.map((p) => (
+                    <tr
+                      key={p.id}
+                      className="transition-colors hover:bg-mint/30"
                     >
-                      {p.name}
-                    </Link>
-                    <div className="text-xs text-zinc-500">{p.email}</div>
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-zinc-700">
-                    {p.upcomingAppointmentCount}
-                  </td>
-                  <td className="px-4 py-3">
-                    {p.nextAppointment ? (
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-zinc-700">
-                          {formatDateTime(p.nextAppointment.date)}
-                        </span>
-                        <span className="flex items-center gap-1.5 text-xs text-zinc-500">
-                          {p.nextAppointment.provider}
-                          {p.nextAppointment.isRecurring ? (
-                            <Chip>{cadenceLabel(p.nextAppointment.cadence)}</Chip>
-                          ) : null}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-zinc-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 tabular-nums text-zinc-700">
-                    {p.activePrescriptionCount}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Link
-                      href={`/admin/patients/${p.id}`}
-                      className="text-sm font-medium text-emerald-800 hover:underline"
-                    >
-                      Open →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      <td className="px-5 py-4">
+                        <Link
+                          href={`/admin/patients/${p.id}`}
+                          className="font-semibold text-brand underline-offset-2 hover:underline"
+                        >
+                          {p.name}
+                        </Link>
+                        <div className="text-xs text-muted">{p.email}</div>
+                      </td>
+                      <td className="px-5 py-4 tabular-nums text-ink">
+                        {p.upcomingAppointmentCount}
+                      </td>
+                      <td className="px-5 py-4">
+                        {p.nextAppointment ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-ink">
+                              {formatDateTime(p.nextAppointment.date)}
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs text-muted">
+                              {p.nextAppointment.provider}
+                              {p.nextAppointment.isRecurring ? (
+                                <Chip>
+                                  {cadenceLabel(p.nextAppointment.cadence)}
+                                </Chip>
+                              ) : null}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted/60">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 tabular-nums text-ink">
+                        {p.activePrescriptionCount}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <Link
+                          href={`/admin/patients/${p.id}`}
+                          className="text-sm font-semibold text-brand underline-offset-2 hover:underline"
+                        >
+                          Open →
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Reveal>
       )}
-    </div>
+    </PageTransition>
   );
 }
