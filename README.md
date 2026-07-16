@@ -478,6 +478,9 @@ DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:seed
 
 ### Deploy
 
+The GitHub repo is connected to the Vercel project, so **every push to `main` triggers a production
+deployment automatically** (and pushes to other branches get preview URLs). To deploy manually:
+
 ```bash
 vercel deploy --prod        # builds remotely with the injected env vars
 ```
