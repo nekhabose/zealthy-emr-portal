@@ -35,6 +35,10 @@ yarn-error.log*
 .env.*
 !.env.example
 
+# markdown docs (kept local; only README is published)
+*.md
+!README.md
+
 # vercel
 .vercel
 
