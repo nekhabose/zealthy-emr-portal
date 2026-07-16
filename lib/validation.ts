@@ -125,3 +125,9 @@ export const credentialsSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 export type CredentialsInput = z.infer<typeof credentialsSchema>;
+
+/** Admin (mini-EMR) login — a single shared password, compared against `ADMIN_PASSWORD`. */
+export const adminLoginSchema = z.object({
+  password: z.string().min(1, "Enter the admin password"),
+});
+export type AdminLoginInput = z.infer<typeof adminLoginSchema>;

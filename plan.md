@@ -12,6 +12,7 @@
 | 5     | Auth + Patient Portal (`/`)          | ✅ Complete (2026-07-15) |
 | 6     | Design system & motion polish        | ✅ Complete (2026-07-15) |
 | 7     | Deploy, docs, ship                   | ✅ Complete (2026-07-15) |
+| 8     | Admin authentication (post-brief)    | ✅ Complete (2026-07-15) |
 
 **Live URL:** https://zealthy-emr-portal.vercel.app — mini-EMR at `/admin` (open), patient portal at `/` (log in with the seeded credentials below).
 
@@ -734,6 +735,68 @@ link). No application code changed in Phase 7.
 **Verification:** visit https://zealthy-emr-portal.vercel.app — open `/admin` (patients table),
 then `/` and log in with `mark@some-email-provider.net` / `Password123!`; confirm the 7-day
 dashboard and the 3-month drill-downs, then sign out.
+
+---
+
+## Phase 8 — Admin authentication (post-brief)  ✅ COMPLETE (2026-07-15)
+
+**Goal:** gate the mini-EMR behind a staff login. Requested after the brief (which
+specified `/admin` has *no* auth), so tracked as a deliberate, documented deviation.
+
+- [x] **Isolated admin session, separate from the Auth.js patient session.** An operator
+  is not a `Patient`, so admin access is a self-contained **HMAC-signed, expiring cookie**
+  rather than a role bolted onto the patient JWT.
+  - `lib/admin-auth.ts` (**new, EDGE-SAFE**) — `signAdminToken`/`verifyAdminToken`
+    (HMAC-SHA256 over `AUTH_SECRET` of an expiry timestamp; 7-day life) and a
+    constant-time `checkAdminPassword` against `ADMIN_PASSWORD`. Web Crypto only (no
+    next/headers, no Prisma) so it bundles into the edge proxy.
+  - `lib/admin-helpers.ts` (**new, Node**) — `requireAdmin()` / `isAdminAuthenticated()`
+    read the cookie via next/headers; the authoritative check next to the data.
+- [x] **Login/logout** — `app/admin/auth-actions.ts` (`adminLoginAction` sets the httpOnly
+  cookie + redirects; `adminLogoutAction` clears it), `app/admin/login/page.tsx`, and
+  `components/admin/AdminLoginForm.tsx` (mirrors the portal login, `useActionState` + shake).
+  `adminLoginSchema` added to `lib/validation.ts`.
+- [x] **Guards, defense in depth.** `proxy.ts` now guards `/admin/*` (except `/admin/login`)
+  by verifying the cookie — which also intercepts Server Action POSTs to those routes; the
+  matcher gained `"/admin"` + `"/admin/:path*"`. Every protected admin page **and all 10
+  admin mutation actions** additionally call `requireAdmin()`. The layout shows a **Sign
+  out** button when a session is present.
+- [x] **Env** — `ADMIN_PASSWORD` documented in `.env.example`, set locally, and set in
+  Vercel (Production + Development; Preview skipped — the old CLI wouldn't add it
+  non-interactively, and main → Production is the deploy path). The value is kept OUT of
+  the repo (it grants write access to all patient records) — it lives only in Vercel env
+  and local `.env`, and is shared with reviewers privately.
+- [x] **Tests** — `tests/admin-auth.test.ts` (6 cases: sign/verify roundtrip, malformed,
+  tampered signature, tampered/extended expiry, expiry boundary, password check).
+
+**Files:** `lib/admin-auth.ts`, `lib/admin-helpers.ts`, `app/admin/auth-actions.ts`,
+`app/admin/login/page.tsx`, `components/admin/AdminLoginForm.tsx`, `tests/admin-auth.test.ts`
+(**new**); `proxy.ts`, `app/admin/layout.tsx`, `app/admin/page.tsx`,
+`app/admin/patients/new/page.tsx`, `app/admin/patients/[id]/page.tsx`, `app/admin/actions.ts`,
+`lib/validation.ts`, `.env.example`, `README.md`, `plan.md` (modified).
+
+**Decisions & deviations (as-built):**
+
+- **Separate cookie, not Auth.js.** Auth.js's single-session model can't cleanly represent
+  "a patient OR an operator"; a dedicated signed cookie keeps the two actors independent and
+  the patient auth untouched. Signed with the same `AUTH_SECRET` (no new secret to manage).
+- **Proxy guards mutations too.** Because Server Actions POST to their `/admin/*` route, the
+  proxy already bounces unauthenticated mutation attempts — but `requireAdmin()` on each
+  action is kept as the authoritative, matcher-independent check.
+- **`/admin/patients/new` flipped to `force-dynamic`.** It was statically prerendered; reading
+  the admin cookie makes it dynamic.
+- **Preview env var not set** (old Vercel CLI 52.2.1 rejects non-interactive Preview adds); a
+  2-click dashboard add if preview deploys are ever needed. Production has it.
+
+**Validation (all green):**
+
+- `npm run typecheck`, `npm run lint` — clean. `npm test` — **40/40** (34 prior + 6 new
+  admin-auth). `npm run build` — compiles; new `/admin/login` (ƒ) route, `/admin/patients/new`
+  now ƒ dynamic.
+- **Local dev smoke:** unauth `/admin`, `/admin/patients/new`, `/admin/patients/:id` → **307**
+  → `/admin/login`; `/admin/login` → **200** (renders the form). A validly-signed cookie (minted
+  with the app's own code) → `/admin` **200** rendering the patients table + a **Sign out**
+  button; a tampered cookie → **307** back to login.
 
 ---
 

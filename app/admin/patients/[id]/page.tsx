@@ -14,6 +14,7 @@
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/admin-helpers";
 import { getPatientDetail } from "@/lib/services/patients";
 import { listDosages, listMedications } from "@/lib/services/reference";
 import {
@@ -50,6 +51,7 @@ export default async function PatientRecordPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdmin();
   const { id } = await params;
   const [detail, medications, dosages] = await Promise.all([
     getPatientDetail(id),

@@ -7,6 +7,7 @@
 // the (otherwise deterministic) service.
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/admin-helpers";
 import { listPatientsWithCounts } from "@/lib/services/patients";
 import { formatDateTime } from "@/lib/format";
 import { cadenceLabel } from "@/components/admin/cadence";
@@ -17,6 +18,7 @@ import { PageTransition, Reveal } from "@/components/ui/motion";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPatientsPage() {
+  await requireAdmin();
   const patients = await listPatientsWithCounts(new Date());
 
   return (

@@ -2,8 +2,8 @@
 
 ### 🔗 Live: **https://zealthy-emr-portal.vercel.app**
 
-- **Mini-EMR** (no login): [`/admin`](https://zealthy-emr-portal.vercel.app/admin)
-- **Patient Portal** (log in): [`/`](https://zealthy-emr-portal.vercel.app/) — use a [seeded credential](#seeded-test-credentials), e.g. `mark@some-email-provider.net` / `Password123!`
+- **Mini-EMR** (staff login): [`/admin`](https://zealthy-emr-portal.vercel.app/admin) — password provided separately (see [Admin access](#seeded-test-credentials))
+- **Patient Portal** (patient login): [`/`](https://zealthy-emr-portal.vercel.app/) — use a [seeded credential](#seeded-test-credentials), e.g. `mark@some-email-provider.net` / `Password123!`
 
 Deployed on **Vercel** with a **Neon** Postgres database. Source:
 [github.com/nekhabose/zealthy-emr-portal](https://github.com/nekhabose/zealthy-emr-portal).
@@ -230,9 +230,10 @@ afterward, so it never disturbs the seeded sample patients.
 
 ## Mini-EMR admin surface (Phase 4)
 
-The `/admin` surface is the operator-facing EMR — **open by design** (the brief specifies
-no auth here; the Phase-5 portal is the guarded surface). It's built entirely on the
-Phase-3 services and actions, with no changes to that layer.
+The `/admin` surface is the operator-facing EMR. The original brief specified no auth
+here, but it is now **gated by a shared staff login** (see [Admin authentication](#admin-authentication)
+below) — a `requireAdmin()` check guards every page and mutation. It's otherwise built
+entirely on the Phase-3 services and actions, with no changes to that layer.
 
 ### Routes
 
@@ -328,6 +329,35 @@ Sign in with a seeded credential (below) or a patient you created in `/admin`, r
 
 ---
 
+## Admin authentication
+
+The mini-EMR at `/admin` is gated by a **shared staff password**, kept deliberately
+**separate from the patient (Auth.js) session** — an operator isn't a `Patient` row, so
+folding admin access into the patient JWT would be wrong. Instead it's a small,
+self-contained signed-cookie session:
+
+| File | Role |
+| ---- | ---- |
+| `lib/admin-auth.ts` | **Edge-safe** primitives (Web Crypto only): mint/verify an HMAC-signed, expiring session token; constant-time password check against `ADMIN_PASSWORD`. Bundles into the proxy. |
+| `lib/admin-helpers.ts` | Node-only `requireAdmin()` / `isAdminAuthenticated()` — read the cookie via `next/headers`, the authoritative check next to the data. |
+| `app/admin/auth-actions.ts` | `adminLoginAction` (verify password → set the httpOnly cookie → redirect) and `adminLogoutAction`. |
+| `app/admin/login/page.tsx` + `components/admin/AdminLoginForm.tsx` | The login route + form (mirrors the portal login). |
+| `proxy.ts` | Guards `/admin/*` (except `/admin/login`) by verifying the cookie — which also intercepts Server Action POSTs to those routes. |
+
+**Defense in depth.** The proxy is the fast redirect; every protected admin **page** and
+every admin **mutation action** additionally calls `requireAdmin()`, so records can't be
+read or written without a valid session even by a direct request. The token is an
+HMAC-SHA256 (over `AUTH_SECRET`) of an expiry timestamp — tamper or expiry ⇒ rejected;
+the login never confirms whether the password was close. The token logic is unit-tested
+(`tests/admin-auth.test.ts`).
+
+> **Note on the brief.** The exercise brief specified the EMR has *no* auth; this login
+> was added on request afterward. Like the patient passwords, the admin password is a
+> single shared secret in an env var — fine for a demo, but a real system would use
+> per-operator accounts with roles and hashed credentials.
+
+---
+
 ## Design system & motion (Phase 6)
 
 Phase 6 applies the [`Zealthy.md`](./Zealthy.md) visual direction across both surfaces —
@@ -419,8 +449,13 @@ Both sample patients share the same password — use either to log in at `/`:
 | Mark Johnson | `mark@some-email-provider.net` | `Password123!` |
 | Lisa Smith   | `lisa@some-email-provider.net` | `Password123!` |
 
-The mini-EMR is open at `/admin` (no login); the portal at `/` requires one of the above
-(or any patient you create in the EMR).
+**Mini-EMR staff login** — the operator EMR at `/admin` is gated by a single shared
+password (the `ADMIN_PASSWORD` env var). Unlike the patient demo logins, this password is
+**not published here** — it grants write access to every patient record on the live site.
+For local development, set your own `ADMIN_PASSWORD` in `.env`; the live-demo password is
+provided separately (submission notes / on request).
+
+The portal at `/` requires a patient credential above (or any patient you create in the EMR).
 
 ### Useful scripts
 

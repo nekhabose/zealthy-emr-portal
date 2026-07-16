@@ -5,12 +5,17 @@
 // redirects to the new patient's record.
 
 import Link from "next/link";
+import { requireAdmin } from "@/lib/admin-helpers";
 import { createPatientAction } from "@/app/admin/actions";
 import { PatientForm } from "@/components/admin/PatientForm";
 import { cardClass } from "@/components/ui/controls";
 import { PageTransition } from "@/components/ui/motion";
 
-export default function NewPatientPage() {
+// Reads the admin cookie, so it must render fresh (not statically prerendered).
+export const dynamic = "force-dynamic";
+
+export default async function NewPatientPage() {
+  await requireAdmin();
   return (
     <PageTransition className="mx-auto max-w-xl space-y-6">
       <div>
