@@ -1,0 +1,16 @@
+# Files that must never be uploaded to Vercel's build.
+# Production env vars are provided by the Vercel project (dashboard + Neon
+# integration), so no local .env file should ship with the deployment bundle.
+.env
+.env.*
+
+# Local-only artifacts (also git-ignored; listed here so a stray copy never uploads).
+node_modules
+.next
+coverage
+*.tsbuildinfo
+
+# Not needed at build/runtime on Vercel.
+tests
+vitest.config.ts
+vitest.integration.config.ts

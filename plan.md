@@ -11,7 +11,9 @@
 | 4     | Mini-EMR (`/admin`)                  | ✅ Complete (2026-07-15) |
 | 5     | Auth + Patient Portal (`/`)          | ✅ Complete (2026-07-15) |
 | 6     | Design system & motion polish        | ✅ Complete (2026-07-15) |
-| 7     | Deploy, docs, ship                   | ⬜ Not started  |
+| 7     | Deploy, docs, ship                   | ✅ Complete (2026-07-15) |
+
+**Live URL:** https://zealthy-emr-portal.vercel.app — mini-EMR at `/admin` (open), patient portal at `/` (log in with the seeded credentials below).
 
 ## Context
 
@@ -646,18 +648,97 @@ tiles + animated nav; toggle the OS "reduce motion" setting and reload — entra
 plain fades, the shimmer/float loops stop, and all content is immediately visible; shrink to
 a mobile width to see the bottom nav and one-column hero.
 
-## Phase 7 — Deploy, docs, ship
+## Phase 7 — Deploy, docs, ship  ✅ COMPLETE (2026-07-15)
 
-**Goal:** live URL + repo.
+**Goal:** live URL + repo. **Live:** https://zealthy-emr-portal.vercel.app
 
-- Provision **Neon Postgres** (via Vercel integration), set `DATABASE_URL` + `AUTH_SECRET` in Vercel env.
-- Build: `prisma generate`; run `prisma migrate deploy` + seed against the hosted DB (one-time seed step documented).
-- Deploy to **Vercel**; verify `/admin` and `/` on the live URL.
-- Finalize `README.md`: architecture, local setup, seed command, **test credentials**, live URL, and the plaintext-password design note. Push to GitHub.
+- [x] **Provisioned Neon Postgres via the Vercel Marketplace integration** (`vercel integration
+  add neon`, Free plan, region `iad1`/us-east-1, `auth=false`). The integration created the
+  `zealthy-db` resource, connected it to the `zealthy-emr-portal` Vercel project, and
+  auto-injected the connection env vars (`DATABASE_URL` pooled, `DATABASE_URL_UNPOOLED` direct,
+  plus the `POSTGRES_*`/`PG*` aliases) across Production/Preview/Development.
+- [x] Generated a fresh production **`AUTH_SECRET`** (`openssl rand -base64 32`) and set it as a
+  Vercel env var (Production). No secret is committed — `.env`/`.env.local` stay git-ignored and
+  are also excluded from the deploy bundle by a new **`.vercelignore`**.
+- [x] **Build command** is `prisma generate && next build` (package.json `build`) so the Prisma
+  Client is regenerated on Vercel even when `node_modules` is restored from cache and the
+  `postinstall` generate is skipped. Added a `db:deploy` (`prisma migrate deploy`) script.
+- [x] **One-time schema + seed against the hosted DB**, run locally against the Neon **direct**
+  (unpooled) connection — PgBouncer's transaction pooling doesn't support the session advisory
+  locks `prisma migrate` needs: `prisma migrate deploy` applied `20260715212929_init`, then
+  `prisma db seed` loaded **2 patients / 4 appointments / 4 prescriptions / 7 medications / 11
+  dosages**. The app's *runtime* queries use the pooled `DATABASE_URL`.
+- [x] **Deployed to Vercel Production** (`vercel deploy --prod`), aliased to
+  `https://zealthy-emr-portal.vercel.app`. Verified public (no deployment-protection wall).
+- [x] **Finalized `README.md`** — live URL, architecture, local setup, seed command, seeded test
+  credentials, the one-time hosted-deploy runbook, and the plaintext-password design note.
+- [x] Committed and pushed the Phase-7 changes to
+  `github.com/nekhabose/zealthy-emr-portal`.
+
+**Files:** `package.json` (`build` = `prisma generate && next build`, new `db:deploy` script),
+`.env.example` (documents Neon pooled-vs-direct + the integration-injected vars), `.vercelignore`
+(**new** — keeps `.env*`/tests/build artifacts out of the deploy bundle), `README.md` (deployment
+section rewritten to "done" + live URL), `plan.md` (this section), `.vercel/` (git-ignored project
+link). No application code changed in Phase 7.
+
+**Decisions & deviations from original plan (as-built):**
+
+- **Neon provisioned entirely via the Vercel CLI, non-interactively.** `vercel integration add
+  neon` supports `--non-interactive` (the default when an agent is detected) with `--plan`,
+  `-m region=…`, and `-m auth=…`. The only human gate was a one-time **marketplace terms
+  acceptance** (`vercel integration accept-terms neon --yes`), confirmed with the user before
+  running since it binds their account to Neon's EULA/privacy policy. `auth=false` was chosen —
+  the portal already has its own Auth.js Credentials login, so Neon Auth (Stack Auth) would be
+  dead weight.
+- **Pooled URL used as-is at runtime (no `pgbouncer=true`).** Modern Neon's PgBouncer supports
+  protocol-level prepared statements, so the integration-provided `DATABASE_URL` (pooled,
+  `sslmode=require&channel_binding=require`) works with Prisma without the legacy `pgbouncer=true`
+  flag. Confirmed empirically: every DB-backed live route renders correctly with zero
+  prepared-statement errors. Migrations still use the **direct** URL (`DATABASE_URL_UNPOOLED`).
+- **Migrations/seed run once, locally, against the direct URL — not in the Vercel build.** Running
+  `migrate deploy` inside the build against a *pooled* connection can hang on advisory locks, and
+  re-seeding on every deploy is undesirable. So the schema/seed is a documented one-time step (per
+  the plan's intent), and the build stays `prisma generate && next build`.
+- **`.vercelignore` added.** The first `vercel deploy` uploaded the local `.env` (Vercel warned;
+  harmless because Vercel's injected `process.env` outranks it in Next's env load order, so Neon
+  still won). To keep local secrets out of the build bundle entirely, `.vercelignore` excludes
+  `.env*` (and tests/build artifacts); the clean redeploy uploaded no `.env`.
+- **New Vercel project, not the pre-existing `zealthy-patient-portal`.** That project already on
+  the account is an unrelated **Expo** app (`npx expo export`); this Next.js app got its own
+  project, `zealthy-emr-portal`, matching the GitHub repo name.
+- **GitHub auto-deploy not wired.** Vercel's GitHub app isn't authorized on the repo, so the CLI's
+  auto-connect step failed harmlessly; deploys are done via `vercel deploy --prod` (the repo is
+  still pushed to GitHub for the take-home deliverable). Connecting the Git integration in the
+  dashboard would enable push-to-deploy later.
+
+**Validation (all green):**
+
+- `npm run typecheck`, `npm run lint` — clean. `npm test` — **34/34** (Phase 7 changed no logic).
+- `npm run build` locally with the new `prisma generate && next build` — compiles; all 9 routes
+  emit unchanged.
+- **Hosted DB:** `prisma migrate deploy` applied the `init` migration to Neon; `prisma db seed`
+  → 2 patients / 4 appts / 4 Rx / 7 meds / 11 dosages.
+- **Vercel build** (remote) — completed in ~21–40s; clean redeploy uploaded no `.env`.
+- **Live smoke against `https://zealthy-emr-portal.vercel.app` (curl):**
+  - `/` → **200** (login page, correct `<title>`); no deployment-protection wall.
+  - `/admin` → **200**, renders both seeded patients (Mark Johnson, Lisa Smith) — proves the live
+    Prisma → Neon **pooled** connection end-to-end.
+  - Unauthenticated `/portal` → **307** redirect to `/` (proxy guard).
+  - Real Auth.js login (CSRF → credentials POST as Mark) → **302** to `/portal` + a
+    `__Secure-authjs.session-token` cookie; `/portal` → **200** rendering Mark's greeting + 7-day
+    sections, with **0** mentions of Lisa (per-patient isolation).
+  - **Wrong password** → **302** to `/?error=CredentialsSignin`, **no** session cookie set.
+  - `/portal/appointments` and `/portal/prescriptions` → **200**, the prescriptions drill-down
+    rendering real medication names (Lexapro, Ozempic) from the 3-month refill expansion.
+
+**Verification:** visit https://zealthy-emr-portal.vercel.app — open `/admin` (patients table),
+then `/` and log in with `mark@some-email-provider.net` / `Password123!`; confirm the 7-day
+dashboard and the 3-month drill-downs, then sign out.
 
 ---
 
 ## Proposed file structure
+
 
 ```
 app/

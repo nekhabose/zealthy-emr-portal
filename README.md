@@ -1,5 +1,15 @@
 # Zealthy — Mini-EMR & Patient Portal
 
+### 🔗 Live: **https://zealthy-emr-portal.vercel.app**
+
+- **Mini-EMR** (no login): [`/admin`](https://zealthy-emr-portal.vercel.app/admin)
+- **Patient Portal** (log in): [`/`](https://zealthy-emr-portal.vercel.app/) — use a [seeded credential](#seeded-test-credentials), e.g. `mark@some-email-provider.net` / `Password123!`
+
+Deployed on **Vercel** with a **Neon** Postgres database. Source:
+[github.com/nekhabose/zealthy-emr-portal](https://github.com/nekhabose/zealthy-emr-portal).
+
+---
+
 A full-stack take-home built as **two apps in one Next.js project**:
 
 1. **Mini-EMR** at `/admin` (no auth) — a table of patients with at-a-glance data;
@@ -30,7 +40,7 @@ design direction live in [`Zealthy.md`](./Zealthy.md).
 | Date / recurrence  | **UTC-native** helpers (`lib/datetime.ts`) *(Phase 2)*        |
 | Data access        | **Service layer + Server Actions** (`lib/services/*`, `app/admin/actions.ts`) *(Phase 3)* |
 | Tests              | **Vitest** — unit (recurrence, mappers) + live integration *(Phase 3)* |
-| Deployment         | **Vercel** — *Phase 7*                                         |
+| Deployment         | **Vercel** (live) + **Neon** Postgres via the Vercel Marketplace integration *(Phase 7)* |
 
 ### A note on Prisma versions
 
@@ -54,7 +64,7 @@ This repository is being built in phases (see [`plan.md`](./plan.md)).
 | **4** | **Mini-EMR (`/admin`)**                    | ✅ **Complete** |
 | **5** | **Auth + Patient Portal (`/`)**            | ✅ **Complete** |
 | **6** | **Design system & motion polish**          | ✅ **Complete** |
-| 7     | Deploy, docs, ship                         | ⬜ Not started  |
+| **7** | **Deploy, docs, ship**                     | ✅ **Complete** |
 
 **Phase 0 delivered:** a running Next.js + TypeScript + Tailwind skeleton, the
 Phase-1+ dependencies installed (Prisma, Zod, NextAuth v5, date-fns), a Postgres
@@ -105,6 +115,13 @@ login page becomes an editorial two-column hero; the portal gains at-a-glance st
 a sticky blurred header, and a mobile bottom nav; both surfaces get shimmer skeleton
 loaders. **No application logic, data model, or API changed** — Phase 6 is purely
 presentational. See [Design system & motion](#design-system--motion-phase-6) below.
+
+**Phase 7 delivered:** the app is **live at
+[zealthy-emr-portal.vercel.app](https://zealthy-emr-portal.vercel.app)** on **Vercel**, backed by a
+**Neon** Serverless Postgres provisioned through the Vercel Marketplace integration. The schema was
+migrated and seeded once against the hosted database; the build regenerates the Prisma Client
+(`prisma generate && next build`), runtime queries use Neon's pooled connection, and secrets live in
+Vercel's env store (never committed). See [Deployment](#deployment-phase-7) below.
 
 ---
 
@@ -424,12 +441,49 @@ The mini-EMR is open at `/admin` (no login); the portal at `/` requires one of t
 
 ---
 
-## Deployment (planned — Phase 7)
+## Deployment (Phase 7)
 
-- Provision **Neon Postgres** and set `DATABASE_URL` + `AUTH_SECRET` in Vercel env.
-- Build runs `prisma generate`; `prisma migrate deploy` + seed run against the
-  hosted database (one-time).
-- Deploy to **Vercel**; verify `/admin` and `/` on the live URL.
+**Live:** https://zealthy-emr-portal.vercel.app · hosted on **Vercel**, database on **Neon**
+(Serverless Postgres) provisioned via the Vercel Marketplace integration.
+
+### How it's wired
+
+- **Database — Neon via Vercel.** The Neon integration created the database and injected the
+  connection env vars into the Vercel project across all environments. Two matter here:
+  - `DATABASE_URL` — the **pooled** connection (host `…-pooler…neon.tech`); the app's runtime
+    queries use this. Modern Neon's PgBouncer supports prepared statements, so Prisma works over it
+    with no `pgbouncer=true` flag.
+  - `DATABASE_URL_UNPOOLED` — the **direct** connection; used only for migrations/seeding, because
+    PgBouncer's transaction pooling can't hold the advisory locks `prisma migrate` needs.
+- **Build.** Vercel runs `npm run build` = **`prisma generate && next build`** — the explicit
+  `prisma generate` guarantees a fresh Prisma Client even when `node_modules` is restored from
+  cache (a common Prisma-on-Vercel gotcha).
+- **Secrets.** `AUTH_SECRET` (and the Neon vars) live in Vercel's env store. `.env` / `.env.local`
+  are git-ignored **and** excluded from the deploy bundle by [`.vercelignore`](./.vercelignore).
+- **All data routes are `force-dynamic`**, so the build never touches the database; the schema is
+  applied and seeded as a one-time step (below), not during the build.
+
+### One-time hosted-DB setup (runbook)
+
+Run once against the **direct** (unpooled) Neon URL — after provisioning Neon, pull the vars with
+`vercel env pull .env.local`, then:
+
+```bash
+# apply the schema to Neon (uses the DIRECT connection for advisory-lock support)
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:deploy   # prisma migrate deploy
+
+# load the sample patients + reference lists (idempotent)
+DATABASE_URL="$DATABASE_URL_UNPOOLED" npm run db:seed
+```
+
+### Deploy
+
+```bash
+vercel deploy --prod        # builds remotely with the injected env vars
+```
+
+The live `/admin`, `/`, portal login, per-patient isolation, and the 3-month drill-downs were all
+verified against the deployed URL (see `plan.md` → Phase 7 → Validation).
 
 ---
 
