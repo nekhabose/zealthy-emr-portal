@@ -12,7 +12,7 @@
 | 5     | Auth + Patient Portal (`/`)          | ✅ Complete (2026-07-15) |
 | 6     | Design system & motion polish        | ✅ Complete (2026-07-15) |
 | 7     | Deploy, docs, ship                   | ✅ Complete (2026-07-15) |
-| 8     | Admin authentication (post-brief)    | ✅ Complete (2026-07-15) |
+| 8     | Admin authentication (post-brief)    | ↩️ Reverted (2026-07-15) — `/admin` restored to open access to match the brief |
 
 **Live URL:** https://zealthy-emr-portal.vercel.app — mini-EMR at `/admin` (open), patient portal at `/` (log in with the seeded credentials below).
 
@@ -738,7 +738,26 @@ dashboard and the 3-month drill-downs, then sign out.
 
 ---
 
-## Phase 8 — Admin authentication (post-brief)  ✅ COMPLETE (2026-07-15)
+## Phase 8 — Admin authentication (post-brief)  ↩️ REVERTED (2026-07-15)
+
+> **Reverted on 2026-07-15.** This phase gated `/admin` behind a staff login, but the
+> exercise brief explicitly states the EMR "should **not** require authentication," and
+> the shared password (kept out of the repo) risked blocking a reviewer. To match the
+> brief, the admin auth was fully removed and `/admin` restored to open access:
+> - **Deleted:** `lib/admin-auth.ts`, `lib/admin-helpers.ts`, `app/admin/auth-actions.ts`,
+>   `app/admin/login/page.tsx`, `components/admin/AdminLoginForm.tsx`,
+>   `tests/admin-auth.test.ts`.
+> - **Reverted:** `proxy.ts` (portal-only guard again; matcher back to `["/portal/:path*"]`),
+>   `app/admin/layout.tsx` (no session/sign-out), `app/admin/actions.ts` (removed all
+>   `requireAdmin()` calls), `app/admin/page.tsx` / `patients/[id]` / `patients/new`
+>   (guard removed; `new` is static again), `lib/validation.ts` (removed `adminLoginSchema`),
+>   `.env.example` / `README.md` (removed `ADMIN_PASSWORD` + admin-auth docs).
+> - **Verified:** typecheck/lint clean; `npm test` → **34/34** (the 6 admin-auth tests
+>   removed); build emits no `/admin/login`, `/admin/patients/new` static again; runtime
+>   smoke: `/admin` → 200 (open), `/admin/login` → 404, `/portal` → 307 → `/` (portal guard
+>   intact).
+>
+> The original phase write-up is preserved below for history.
 
 **Goal:** gate the mini-EMR behind a staff login. Requested after the brief (which
 specified `/admin` has *no* auth), so tracked as a deliberate, documented deviation.

@@ -8,15 +8,12 @@
 //   3. revalidate the `/admin` route tree so the table + detail pages refetch,
 //   4. return a typed `FormState` for `useActionState` inline error rendering.
 //
-// The `/admin` surface is password-gated (see proxy.ts + lib/admin-helpers), so every
-// action starts with `requireAdmin()` — defense in depth next to the write, even though
-// the proxy already intercepts these Server Action POSTs. Signatures lead with any bound
-// id (`.bind(null, id)` in the Phase-4 forms) followed by the `(prevState, formData)`
-// pair `useActionState` supplies.
+// The `/admin` surface is open by design (the brief specifies no auth for the EMR).
+// Signatures lead with any bound id (`.bind(null, id)` in the Phase-4 forms) followed by
+// the `(prevState, formData)` pair `useActionState` supplies.
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireAdmin } from "@/lib/admin-helpers";
 import {
   fieldErrors,
   invalid,
@@ -66,7 +63,6 @@ export async function createPatientAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const parsed = patientSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -93,7 +89,6 @@ export async function updatePatientAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const parsed = patientUpdateSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -120,7 +115,6 @@ export async function createAppointmentAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const parsed = appointmentSchema.safeParse({
     provider: formData.get("provider"),
     datetime: formData.get("datetime"),
@@ -140,7 +134,6 @@ export async function updateAppointmentAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const parsed = appointmentSchema.safeParse({
     provider: formData.get("provider"),
     datetime: formData.get("datetime"),
@@ -160,7 +153,6 @@ export async function deleteAppointmentAction(
   _prev: FormState,
   _formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   await deleteAppointment(id);
   revalidateAdmin();
   return ok("Appointment deleted");
@@ -172,7 +164,6 @@ export async function endAppointmentRecurrenceAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const endsAt = parseEndsAt(formData.get("endsAt"));
   if (!endsAt) return invalid({ endsAt: ["Enter a valid end date"] });
 
@@ -198,7 +189,6 @@ export async function createPrescriptionAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const schema = await prescriptionSchemaWithReference();
   const parsed = schema.safeParse({
     medication: formData.get("medication"),
@@ -221,7 +211,6 @@ export async function updatePrescriptionAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const schema = await prescriptionSchemaWithReference();
   const parsed = schema.safeParse({
     medication: formData.get("medication"),
@@ -244,7 +233,6 @@ export async function deletePrescriptionAction(
   _prev: FormState,
   _formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   await deletePrescription(id);
   revalidateAdmin();
   return ok("Prescription deleted");
@@ -256,7 +244,6 @@ export async function endPrescriptionRecurrenceAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  await requireAdmin();
   const endsAt = parseEndsAt(formData.get("endsAt"));
   if (!endsAt) return invalid({ endsAt: ["Enter a valid end date"] });
 
