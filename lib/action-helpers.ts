@@ -6,6 +6,7 @@
 
 import { Prisma } from "@prisma/client";
 import type { z } from "zod";
+import type { Cadence } from "./recurrence";
 import type { FormState } from "./types";
 
 /**
@@ -40,4 +41,21 @@ export function isUniqueConstraintError(e: unknown): boolean {
   return (
     e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002"
   );
+}
+
+/**
+ * A brand-new **one-off** appointment can't be *scheduled* in the past — it would never
+ * appear as upcoming anywhere, so it's almost certainly a mistake. Guards CREATE only.
+ *
+ * Deliberately narrow: it does NOT flag a past anchor on a *recurring* appointment
+ * (those legitimately recur forward from a past start — the seeded April appointments do
+ * exactly this), and it is not applied to edits (correcting an existing record) or to
+ * prescription refill dates (a back-dated fill is a legitimate record).
+ */
+export function isPastOneOffAppointment(
+  datetime: Date,
+  repeat: Cadence,
+  now: Date,
+): boolean {
+  return repeat === "NONE" && datetime.getTime() < now.getTime();
 }

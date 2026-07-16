@@ -105,6 +105,7 @@ export default async function PatientRecordPage({
             <AppointmentForm
               action={createAppointmentAction.bind(null, patient.id)}
               mode="create"
+              minDateTime={toDateTimeLocalValue(new Date())}
             />
           </Disclosure>
 

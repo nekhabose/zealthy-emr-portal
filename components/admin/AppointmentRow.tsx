@@ -8,9 +8,10 @@
 // Edit / delete / end-recurrence each run their own bound Server Action.
 
 import { useState } from "react";
-import { Chip, btnDanger, btnGhost, btnSecondary } from "@/components/ui/controls";
+import { Chip, btnDanger, btnSecondary } from "@/components/ui/controls";
 import { AppointmentForm, type AppointmentDefaults } from "./AppointmentForm";
 import { ConfirmForm } from "./ConfirmForm";
+import { EndRecurrenceForm } from "./EndRecurrenceForm";
 import type { BoundAction } from "./action";
 
 export interface AppointmentDisplay {
@@ -75,14 +76,12 @@ export function AppointmentRow({
           Edit
         </button>
         {canEndRecurrence ? (
-          <ConfirmForm
+          <EndRecurrenceForm
             action={endAction}
-            className={btnGhost}
-            confirmText="End this recurring appointment as of now? Future occurrences will stop."
-            pendingLabel="Ending…"
-          >
-            End recurring
-          </ConfirmForm>
+            label="End recurring"
+            noun="appointment"
+            minDate={defaults.datetime.slice(0, 10)}
+          />
         ) : null}
         <ConfirmForm
           action={deleteAction}

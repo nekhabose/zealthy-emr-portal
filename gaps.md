@@ -1,12 +1,15 @@
 # Zealthy Mini-EMR & Patient Portal — Gap Analysis
 
-_Assessed 2026-07-15 against the take-home brief. Verified by reading the code (not just the plan) plus running `typecheck` (clean), `lint` (clean), and `npm test` (**40/40 passing**)._
+_Assessed 2026-07-15 against the take-home brief. Verified by reading the code (not just the plan) plus running `typecheck` (clean), `lint` (clean), and `npm test` (**37/37 passing**)._
 
-## Score: **98 / 100**  _(was 96 — admin-auth deviation resolved 2026-07-15)_
+## Score: **100 / 100**  _(96 → 98 → 100 as the three flagged items were resolved, 2026-07-15)_
 
-Every **explicit, required** feature in the brief is implemented, tested, and deployed live. The remaining deductions are two small polish/robustness gaps — neither is something the brief demands.
+Every **explicit, required** feature in the brief is implemented, tested, and deployed live, and all three items originally flagged below have been resolved.
 
-> **Update (2026-07-15):** the admin-auth deviation (G1 below) has been **reverted** — `/admin` is now open access per the brief. All admin-auth files/routes were removed; typecheck/lint clean, `npm test` 34/34, build clean, and runtime confirms `/admin` → 200 (no login), `/admin/login` → 404, `/portal` guard intact. G1 no longer costs points.
+> **Resolution log (2026-07-15):**
+> - **G1 (admin-auth deviation) — reverted.** `/admin` is open access per the brief; all admin-auth code/routes/tests/docs removed. Runtime-confirmed: `/admin` → 200 (no login), `/admin/login` → 404, `/portal` guard intact.
+> - **G2 (end-recurrence date) — implemented.** The "End recurring" / "End refills" controls now open a small form to pick the end date (blank = today), via `components/admin/EndRecurrenceForm.tsx`.
+> - **G3 (past-date scheduling) — implemented.** New one-off appointments can't be scheduled in the past — client `min` on the picker + an authoritative server guard (`isPastOneOffAppointment`, unit-tested). Deliberately scoped so recurring past anchors (which recur forward, like the seed) and back-dated prescription fills stay allowed.
 
 ---
 
@@ -50,16 +53,21 @@ Every **explicit, required** feature in the brief is implemented, tested, and de
 
 ---
 
-## 2. Genuine gaps / risks (the deductions)
+## 2. Previously-flagged items — all RESOLVED ✅
 
 ### ✅ G1 — Admin auth contradicted the brief — **RESOLVED**  _(was −2)_
-The brief explicitly states `/admin` "should **not** require authentication." Phase 8 had added a password gate (`ADMIN_PASSWORD`) kept out of the repo, which risked blocking a reviewer. **This has been reverted** — `/admin` is now open access, all admin-auth code/routes/tests/docs removed, and the change verified (build + runtime). No longer a gap.
+The brief explicitly states `/admin` "should **not** require authentication." Phase 8 had added a password gate (`ADMIN_PASSWORD`) kept out of the repo, which risked blocking a reviewer. **Reverted** — `/admin` is now open access, all admin-auth code/routes/tests/docs removed, verified (build + runtime).
 
-### 🟡 G2 — "End recurring" only supports "end now", not a chosen end date in the UI  _(−1)_
-The action (`endAppointmentRecurrenceAction`) already accepts a custom `endsAt`, but the UI only exposes an "end as of now" confirm button. The brief asks for "a way to end recurring appointments" — satisfied — but a date picker would be the more complete EMR behavior. Server-side capability exists; only the UI control is missing.
+### ✅ G2 — "End recurring" now supports a chosen end date — **RESOLVED**  _(was −1)_
+The end-recurrence controls (`components/admin/EndRecurrenceForm.tsx`) now open a small disclosure with an optional **end-date** field for both appointments ("End recurring") and prescriptions ("End refills"): leave it blank to end today (the prior default, preserved), or pick a date so remaining occurrences run until then. The `endsAt` capability was already in the action; this surfaces it in the UI. The old blind "as of now" confirm button is gone.
 
-### 🟡 G3 — No "past date" guard on appointment/refill creation  _(−1)_
-`appointmentSchema` / `prescriptionSchema` accept any date, including the past. You can schedule an appointment in 2020. Not required by the brief, and arguably correct for back-dating records, but there's no warning/validation and past one-off appts simply never appear in any upcoming view.
+### ✅ G3 — Past-date scheduling is now guarded — **RESOLVED**  _(was −1)_
+A brand-new **one-off** appointment can no longer be scheduled in the past: the create form's datetime picker gets a `min` floor of "now", and `createAppointmentAction` authoritatively rejects it via the pure, unit-tested `isPastOneOffAppointment(datetime, repeat, now)` helper (`tests/action-helpers.test.ts`). The guard is deliberately narrow — it does **not** touch:
+- **Recurring** appointments with a past anchor (they legitimately recur forward — the seeded April 2026 appointments do exactly this), or
+- **Edits** (correcting an existing record), or
+- **Prescription refill dates** (a back-dated fill is a legitimate record).
+
+This closes "past one-off appts silently never appear" without breaking valid back-dating.
 
 ---
 
@@ -85,7 +93,7 @@ The action (`endAppointmentRecurrenceAction`) already accepts a custom `endsAt`,
 | Recurrence correctness (7-day / 3-month, tested) | 10 | 10 |
 | Deployment (live URL) | 5 | 5 |
 | Code quality / tests / architecture | 10 | 10 |
-| Adherence to brief specifics | 10 | 8 (−1 end-date UI, −1 past-date guard; admin-auth deviation resolved) |
-| **Total** | **100** | **98** |
+| Adherence to brief specifics | 10 | 10 (admin-auth reverted; end-date UI + past-date guard implemented) |
+| **Total** | **100** | **100** |
 
-**Bottom line:** functionally complete against 100% of the brief's requirements, with clean types/lint/tests and a live deployment. The admin-auth deviation has been reverted, so `/admin` is open per the brief. The only remaining nits are enhancement-level (a date-picker for "end recurring", a past-date guard) — neither is required by the brief.
+**Bottom line:** functionally complete against 100% of the brief's requirements, with clean types/lint/tests (`npm test` 37/37) and a live deployment. `/admin` is open per the brief, the end-recurrence UI takes a chosen end date, and one-off past-date scheduling is guarded. The section-3 items below remain deliberate scope choices, not defects.

@@ -17,6 +17,7 @@ import { redirect } from "next/navigation";
 import {
   fieldErrors,
   invalid,
+  isPastOneOffAppointment,
   isUniqueConstraintError,
   ok,
 } from "@/lib/action-helpers";
@@ -122,6 +123,14 @@ export async function createAppointmentAction(
     endsAt: formData.get("endsAt"),
   });
   if (!parsed.success) return invalid(fieldErrors(parsed.error));
+
+  // A new one-off appointment in the past would never show as upcoming — reject it.
+  // (Recurring past anchors are fine; they recur forward.)
+  if (isPastOneOffAppointment(parsed.data.datetime, parsed.data.repeat, new Date())) {
+    return invalid({
+      datetime: ["A one-off appointment can't be scheduled in the past"],
+    });
+  }
 
   await createAppointment(patientId, parsed.data);
   revalidateAdmin();

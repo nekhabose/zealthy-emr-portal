@@ -7,9 +7,10 @@
 // passed through to the inline editor so an edit re-selects from the reference tables.
 
 import { useState } from "react";
-import { Chip, btnDanger, btnGhost, btnSecondary } from "@/components/ui/controls";
+import { Chip, btnDanger, btnSecondary } from "@/components/ui/controls";
 import { PrescriptionForm, type PrescriptionDefaults } from "./PrescriptionForm";
 import { ConfirmForm } from "./ConfirmForm";
+import { EndRecurrenceForm } from "./EndRecurrenceForm";
 import type { BoundAction } from "./action";
 
 export interface PrescriptionDisplay {
@@ -86,14 +87,12 @@ export function PrescriptionRow({
           Edit
         </button>
         {canEndRecurrence ? (
-          <ConfirmForm
+          <EndRecurrenceForm
             action={endAction}
-            className={btnGhost}
-            confirmText="End this recurring prescription as of now? Future refills will stop."
-            pendingLabel="Ending…"
-          >
-            End refills
-          </ConfirmForm>
+            label="End refills"
+            noun="prescription"
+            minDate={defaults.refillOn}
+          />
         ) : null}
         <ConfirmForm
           action={deleteAction}

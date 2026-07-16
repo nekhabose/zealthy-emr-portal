@@ -34,12 +34,19 @@ export function AppointmentForm({
   action,
   mode,
   defaults,
+  minDateTime,
   onDone,
   onCancel,
 }: {
   action: BoundAction;
   mode: "create" | "edit";
   defaults?: AppointmentDefaults;
+  /**
+   * Optional "YYYY-MM-DDTHH:mm" floor for the datetime picker — passed in create mode so
+   * a new appointment can't be scheduled in the past (the server also enforces this for
+   * one-off appointments). Omitted in edit mode so existing records stay editable.
+   */
+  minDateTime?: string;
   onDone?: () => void;
   onCancel?: () => void;
 }) {
@@ -81,6 +88,7 @@ export function AppointmentForm({
             name="datetime"
             type="datetime-local"
             defaultValue={defaults?.datetime}
+            min={minDateTime}
             className={inputClass}
             required
           />

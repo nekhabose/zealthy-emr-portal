@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   fieldErrors,
   invalid,
+  isPastOneOffAppointment,
   isUniqueConstraintError,
   ok,
 } from "../lib/action-helpers";
@@ -70,5 +71,26 @@ describe("isUniqueConstraintError", () => {
     expect(isUniqueConstraintError(other)).toBe(false);
     expect(isUniqueConstraintError(new Error("boom"))).toBe(false);
     expect(isUniqueConstraintError(null)).toBe(false);
+  });
+});
+
+describe("isPastOneOffAppointment", () => {
+  const now = new Date("2026-07-15T12:00:00.000Z");
+
+  it("flags a one-off appointment anchored before now", () => {
+    const past = new Date("2026-07-15T11:59:00.000Z");
+    expect(isPastOneOffAppointment(past, "NONE", now)).toBe(true);
+  });
+
+  it("allows a one-off appointment anchored at/after now", () => {
+    expect(isPastOneOffAppointment(now, "NONE", now)).toBe(false);
+    const future = new Date("2026-07-15T12:01:00.000Z");
+    expect(isPastOneOffAppointment(future, "NONE", now)).toBe(false);
+  });
+
+  it("never flags a recurring appointment, even with a past anchor", () => {
+    const past = new Date("2026-04-16T23:30:00.000Z"); // like the seeded appts
+    expect(isPastOneOffAppointment(past, "WEEKLY", now)).toBe(false);
+    expect(isPastOneOffAppointment(past, "MONTHLY", now)).toBe(false);
   });
 });
